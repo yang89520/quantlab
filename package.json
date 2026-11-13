@@ -1,0 +1,20 @@
+{
+  "name": "quantlab",
+  "version": "1.0.0",
+  "description": "QuantLab · 多流派技术分析工作台（自选股 + 分组）",
+  "main": "server.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^4.22.3"
+  },
+  "private": true
+}

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>选股器 · QuantLab</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/screen.css">
+</head>
+<body class="sc-page">
+
+<header>
+  <div class="hd sc-hd">
+    <div class="brand">
+      <div class="logo">QL</div>
+      <div>
+        <h1>QuantLab</h1>
+        <p>Screener</p>
+      </div>
+    </div>
+
+    <div class="sc-status" id="scStatus">
+      <span class="dot wait"></span>
+      <span id="stText">正在拉取全市场行情…</span>
+    </div>
+
+    <div class="hd-right">
+      <div class="metric"><div class="k">池内</div><div class="v" id="allN">—</div></div>
+      <div class="metric"><div class="k">命中</div><div class="v" id="hitN">—</div></div>
+      <a class="btn-ghost" href="/">← 分析台</a>
+      <button class="btn" id="btnReload">刷新</button>
+    </div>
+  </div>
+</header>
+
+<div class="sc-body">
+  <!-- 筛选面板 -->
+  <aside class="sc-panel" id="scPanel">
+    <div class="pnl-head">
+      <span>筛选条件</span>
+      <div class="pnl-acts">
+        <button class="lnk" id="btnReset">重置</button>
+        <button class="lnk pnl-x" id="btnClosePnl">收起</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-t">股票池</div>
+      <div class="seg" id="poolSeg">
+        <button data-pool="main" class="on">主板</button>
+        <button data-pool="all">全部</button>
+        <button data-pool="sh">沪市</button>
+        <button data-pool="sz">深市</button>
+        <button data-pool="cyb">创业板</button>
+        <button data-pool="kcb">科创板</button>
+        <button data-pool="bj">北交所</button>
+      </div>
+      <div class="hint">主板 = 沪 600/601/603/605 + 深 000/001/002/003，约 3160 只。</div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-t">行情</div>
+      <div class="row2">
+        <label>价格<input type="number" id="fPriceMin" placeholder="不限" step="1"></label>
+        <label>至<input type="number" id="fPriceMax" placeholder="不限" step="1"></label>
+      </div>
+      <div class="row2">
+        <label>涨跌 %<input type="number" id="fChgMin" placeholder="不限" step="1"></label>
+        <label>至<input type="number" id="fChgMax" placeholder="不限" step="1"></label>
+      </div>
+      <div class="row2">
+        <label>换手 %<input type="number" id="fTurnMin" placeholder="不限" step="0.5"></label>
+        <label>至<input type="number" id="fTurnMax" placeholder="不限" step="0.5"></label>
+      </div>
+      <div class="row2">
+        <label>振幅 %<input type="number" id="fAmpMin" placeholder="不限" step="1"></label>
+        <label>至<input type="number" id="fAmpMax" placeholder="不限" step="1"></label>
+      </div>
+      <label class="row1">成交额 ≥
+        <select id="fAmt">
+          <option value="0" selected>不限</option>
+          <option value="50000000">5000 万</option>
+          <option value="100000000">1 亿</option>
+          <option value="300000000">3 亿</option>
+          <option value="500000000">5 亿</option>
+          <option value="1000000000">10 亿</option>
+          <option value="3000000000">30 亿</option>
+        </select>
+      </label>
+      <label class="row1">流通市值 ≥
+        <select id="fCap">
+          <option value="0" selected>不限</option>
+          <option value="2000000000">20 亿</option>
+          <option value="5000000000">50 亿</option>
+          <option value="10000000000">100 亿</option>
+          <option value="30000000000">300 亿</option>
+          <option value="100000000000">1000 亿</option>
+        </select>
+      </label>
+      <label class="row1">距涨停 ≤
+        <select id="fLimit">
+          <option value="100">不限</option>
+          <option value="7">7%</option>
+          <option value="5">5%</option>
+          <option value="3">3%</option>
+          <option value="1">1%</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="grp">
+      <div class="grp-t">估值</div>
+      <div class="row2">
+        <label>PE<input type="number" id="fPeMin" placeholder="不限" step="5"></label>
+        <label>至<input type="number" id="fPeMax" placeholder="不限" step="5"></label>
+      </div>
+      <div class="row2">
+        <label>PB<input type="number" id="fPbMin" placeholder="不限" step="1"></label>
+        <label>至<input type="number" id="fPbMax" placeholder="不限" step="1"></label>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-t">排除</div>
+      <label class="chk"><input type="checkbox" id="fExST" checked><span>ST / *ST / 退市</span></label>
+      <label class="chk"><input type="checkbox" id="fExNew" checked><span>新股（N / C 开头）</span></label>
+      <label class="chk"><input type="checkbox" id="fExLow" checked><span>股价 &lt; 2 元</span></label>
+      <label class="chk"><input type="checkbox" id="fExLoss"><span>剔除亏损（PE ≤ 0）</span></label>
+    </div>
+
+    <div class="grp">
+      <div class="grp-t">形态（全池判定）</div>
+      <div class="scan-row">
+        <button class="btn-ghost sm" id="btnScan">扫描全池</button>
+        <span class="scan-info" id="scanInfo">未扫描</span>
+      </div>
+      <label class="chk"><input type="checkbox" id="fMaBull"><span>均线多头（5&gt;10&gt;20&gt;60）</span></label>
+      <label class="chk"><input type="checkbox" id="fAbove20"><span>站上 20 日线</span></label>
+      <label class="chk"><input type="checkbox" id="fMa20Up"><span>20 日线向上</span></label>
+      <label class="chk"><input type="checkbox" id="fVolUp"><span>放量（量 &gt; 5 日均量 1.5×）</span></label>
+      <label class="chk"><input type="checkbox" id="fNew60"><span>创 60 日新高</span></label>
+      <div class="row2">
+        <label>5 日涨幅 ≥<input type="number" id="fGain5" placeholder="不限" step="1"></label>
+        <label>年内位置<input type="number" id="fPos" placeholder="不限" step="10"></label>
+      </div>
+      <div class="hint">扫描对当前股票池的每一只标的判定形态，约 2 分钟跑完主板；结果当日复用，换行情条件或流派不用重扫。</div>
+    </div>
+
+    <div class="grp">
+      <div class="grp-t">按流派精算</div>
+      <label class="row1">流派
+        <select id="fStrategy"></select>
+      </label>
+      <div class="hint">对当前命中的全部标的逐只拉 1200 根真实 K 线，跑该流派完整评分（与详情页同一套代码），不截断候选、不做抽样。</div>
+    </div>
+  </aside>
+  <div class="sc-mask" id="scMask"></div>
+
+  <!-- 结果区 -->
+  <main class="sc-main">
+    <div class="sc-toolbar">
+      <div class="tb-left">
+        <span class="tb-hit"><b id="tbHit">—</b> 只命中</span>
+        <span class="tb-sub" id="tbSub"></span>
+      </div>
+      <div class="tb-right">
+        <span class="tb-sort-label">排序</span>
+        <select id="sortSel">
+          <option value="amount">成交额</option>
+          <option value="chgPct">涨跌幅</option>
+          <option value="turnover">换手率</option>
+          <option value="floatCap">流通市值</option>
+          <option value="amplitude">振幅</option>
+          <option value="screen" disabled>流派评分（精算后）</option>
+        </select>
+        <button class="btn-ghost sm" id="sortDir" data-dir="-1">降序 ↓</button>
+        <button class="btn" id="btnRun">精算</button>
+      </div>
+    </div>
+
+    <div class="sc-progress" id="scProg" hidden>
+      <div class="bar"><i id="progBar"></i></div>
+      <span id="progText"></span>
+    </div>
+
+    <div class="sc-tbl-wrap">
+      <table class="sc-tbl">
+        <thead>
+          <tr>
+            <th class="c-idx">#</th>
+            <th class="c-name">名称 / 代码</th>
+            <th class="c-num" data-sort="price">现价</th>
+            <th class="c-num" data-sort="chgPct">涨跌幅</th>
+            <th class="c-num" data-sort="amount">成交额</th>
+            <th class="c-num" data-sort="turnover">换手</th>
+            <th class="c-num" data-sort="floatCap">流通市值</th>
+            <th class="c-num" data-sort="pe">PE</th>
+            <th class="c-tag">形态</th>
+            <th class="c-score" data-sort="screen">评分</th>
+            <th class="c-verdict">结论</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="sc-empty" id="scEmpty" hidden></div>
+      <div class="sc-more" id="scMore" hidden></div>
+    </div>
+  </main>
+</div>
+
+<button class="sc-fab" id="fabFilter">筛选</button>
+
+<script src="/js/indicators.js"></script>
+<script src="/js/strategies.js"></script>
+<script src="/js/shape.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/screen.js"></script>
+</body>
+</html>

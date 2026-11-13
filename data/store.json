@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "g_core",
+      "name": "核心持仓",
+      "order": 0,
+      "collapsed": false
+    },
+    {
+      "id": "g_mw9bx7042moa",
+      "name": "羊字",
+      "order": 1,
+      "collapsed": false
+    },
+    {
+      "id": "g_mwaid0bsoa9m",
+      "name": "端侧ai",
+      "order": 2,
+      "collapsed": false
+    }
+  ],
+  "items": [
+    {
+      "code": "600986",
+      "name": "浙文互联",
+      "market": "sh",
+      "groupId": "g_core",
+      "order": 0,
+      "addedAt": 1794228777500
+    },
+    {
+      "code": "002724",
+      "name": "海洋王",
+      "market": "sz",
+      "groupId": "g_mw9bx7042moa",
+      "order": 0,
+      "addedAt": 1794232877537
+    },
+    {
+      "code": "002384",
+      "name": "东山精密",
+      "market": "sz",
+      "groupId": "g_core",
+      "order": 1,
+      "addedAt": 1794233253998
+    },
+    {
+      "code": "603533",
+      "name": "掌阅科技",
+      "market": "sh",
+      "groupId": "g_core",
+      "order": 2,
+      "addedAt": 1794241737988
+    },
+    {
+      "code": "600261",
+      "name": "阳光照明",
+      "market": "sh",
+      "groupId": "g_mw9bx7042moa",
+      "order": 1,
+      "addedAt": 1794304075693
+    },
+    {
+      "code": "002086",
+      "name": "东方海洋",
+      "market": "sz",
+      "groupId": "g_mw9bx7042moa",
+      "order": 2,
+      "addedAt": 1794304090050
+    },
+    {
+      "code": "603893",
+      "name": "瑞芯微",
+      "market": "sh",
+      "groupId": "g_mwaid0bsoa9m",
+      "order": 0,
+      "addedAt": 1794304133406
+    },
+    {
+      "code": "600118",
+      "name": "中国卫星",
+      "market": "sh",
+      "groupId": "g_core",
+      "order": 3,
+      "addedAt": 1794305638327
+    }
+  ]
+}

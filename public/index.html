@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuantLab · 多流派技术分析工作台</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/watchlist.css">
+</head>
+<body>
+<header>
+  <div class="hd">
+    <div class="brand">
+      <div class="logo">QL</div>
+      <div>
+        <h1>QuantLab</h1>
+        <p>Technical Workbench</p>
+      </div>
+    </div>
+
+    <div class="stock">
+      <span class="tag-idx" id="sIdxTag" hidden>指数</span>
+      <span class="nm" id="sName">浙文互联</span>
+      <span class="cd" id="sCode">600986.SH</span>
+      <span class="qual" id="sQual" hidden></span>
+      <span class="px" id="sPrice">—</span>
+      <span class="cg" id="sChg">—</span>
+    </div>
+
+    <div class="hd-right">
+      <a class="nav-screen" href="/screen.html" title="全市场选股（真实行情 + 40 流派精算）">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 3h12M4.5 8h7M7 13h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        选股
+      </a>
+      <div class="metric"><div class="k">年内振幅</div><div class="v" id="mAmp">—</div></div>
+      <div class="metric"><div class="k" id="mTurnK">换手率</div><div class="v" id="mTurn">—</div></div>
+      <div class="metric"><div class="k" id="mCapK">流通市值</div><div class="v" id="mCap">—</div></div>
+      <div class="score-wrap">
+        <div class="ring">
+          <svg width="54" height="54">
+            <circle cx="27" cy="27" r="23" fill="none" stroke="#1A2230" stroke-width="4"/>
+            <circle id="ringArc" cx="27" cy="27" r="23" fill="none" stroke="#F6465D" stroke-width="4"
+                    stroke-linecap="round" stroke-dasharray="144.5" stroke-dashoffset="144.5"
+                    style="transition:stroke-dashoffset .7s cubic-bezier(.4,0,.2,1),stroke .4s"/>
+          </svg>
+          <div class="val" id="ringVal">—</div>
+        </div>
+        <div class="score-txt">
+          <div class="t" id="scoreLabel">计算中</div>
+          <div class="s" id="scoreSub">综合技术评分</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="sidebar" id="sidebar">
+    <div class="sb-hd">
+      <button class="sb-fold" id="sbFold" aria-label="展开或收起自选股" aria-expanded="true">⌄</button>
+      <h2>自选股</h2>
+      <span class="sb-ct" id="sbCount"></span>
+      <span class="mkt" id="mktState"><i></i><span>—</span></span>
+      <button class="icon-btn" id="btnAddGroup" title="新建分组">+</button>
+    </div>
+    <div class="sb-search">
+      <input id="sInput" placeholder="搜索 代码/名称/拼音" autocomplete="off" spellcheck="false">
+      <div class="sug" id="sug"></div>
+    </div>
+    <div class="idx-bar" id="idxBar">
+      <div class="idx-hd"><span>大盘指数</span><span class="idx-more" id="idxMore">全部 ›</span></div>
+      <div class="idx-chips" id="idxChips"></div>
+    </div>
+    <div class="groups" id="groupList"></div>
+  </section>
+
+  <!-- ===== 左栏：综合诊断 ===== -->
+  <aside style="display:flex;flex-direction:column;gap:14px">
+    <div class="card">
+      <div class="verdict">
+        <div class="big" id="vBig">—</div>
+        <div class="sm" id="vSm">综合诊断结论</div>
+        <div class="conf"><span id="vConf">—</span></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-t">盘面诊断</div>
+        <div class="kv-row"><span class="k">趋势状态</span><span class="v" id="dTrend">—</span></div>
+        <div class="kv-row"><span class="k">量能状态</span><span class="v" id="dVol">—</span></div>
+        <div class="kv-row"><span class="k">位置分位</span><span class="v" id="dPos">—</span></div>
+        <div class="kv-row"><span class="k">波动水平</span><span class="v" id="dAtr">—</span></div>
+        <div class="kv-row"><span class="k">情绪温度</span><span class="v" id="dSent">—</span></div>
+        <div class="kv-row"><span class="k">风险等级</span><span class="v" id="dRisk">—</span></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-t">多空力量</div>
+        <div class="gauge">
+          <i id="gBull" style="background:linear-gradient(90deg,#8E1B2E,#F6465D)"></i>
+          <i id="gBear" style="background:linear-gradient(90deg,#2EBD85,#165946)"></i>
+        </div>
+        <div class="legend"><span id="lgBull">多方 —</span><span id="lgBear">— 空方</span></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-t">关键价位</div>
+        <div id="zones"></div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-t">操作建议</div>
+        <div id="advice"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== 右栏 ===== -->
+  <div class="main-right" style="display:flex;flex-direction:column;gap:14px;min-width:0">
+
+    <div class="card">
+      <div class="tabs" id="tabs"></div>
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+        <div class="tip" id="tip"></div>
+      </div>
+      <div class="chart-bar">
+        <div class="grp">
+          <span>K线</span>
+          <button class="btn on" data-period="day">日</button>
+          <button class="btn" data-period="week">周</button>
+          <button class="btn" data-period="month">月</button>
+        </div>
+        <div class="grp" id="grpBars" style="margin-left:8px">
+          <span>根数</span>
+          <button class="btn on" data-bars="90">90</button>
+          <button class="btn" data-bars="250">250</button>
+          <button class="btn" data-bars="1200">全部</button>
+        </div>
+        <div class="grp" style="margin-left:18px">
+          <button class="btn on" id="btnAuto" title="副图跟随当前流派自动切换">副图跟随流派</button>
+        </div>
+        <div class="sp" id="chartHint">滚轮缩放 · 拖拽平移 · 悬停查看 · ← → 切换流派</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="insight" id="insight"></div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="card-hd"><span class="dot"></span><h2>全流派评分总览</h2></div>
+      <div class="card-bd">
+        <div class="grid-rows" id="scoreOverview"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div class="dev">
+  <details>
+    <summary>扩展接口文档 · 如何新增一个技术流派</summary>
+    <div class="dev-bd">
+      <p>所有流派通过 <code style="color:var(--gold)">QuantLab.registerStrategy(config)</code> 注册，页面自动生成 Tab、图表叠加层、指标副图、评分与解读文案。新增流派只需追加一个配置对象，无需改动渲染引擎。</p>
+<pre><span class="c">// 1) 注册一个流派（写在 strategies 段末尾即可）</span>
+QuantLab.<span class="f">registerStrategy</span>({
+  <span class="k">id</span>: <span class="s">'mystrategy'</span>,          <span class="c">// 唯一标识</span>
+  <span class="k">name</span>: <span class="s">'我的流派'</span>,           <span class="c">// Tab 显示名</span>
+  <span class="k">color</span>: <span class="s">'#A882FF'</span>,         <span class="c">// 主题色</span>
+  <span class="k">desc</span>: <span class="s">'一句话说明'</span>,
+  <span class="k">sub</span>: <span class="s">'rsi'</span>,               <span class="c">// 副图: macd/kdj/rsi/vol/obv/cci/adx/bias/boll/vr/cmf/turn/rs/fundmacd/mxslope/sho/pabar/ampstr/wyckoff/erm/none</span>
+
+  <span class="c">// 主图叠加：返回声明式指令数组，引擎负责绘制</span>
+  <span class="k">overlay</span>: <span class="f">function</span> (ctx) {
+    <span class="k">return</span> [
+      { type:<span class="s">'hline'</span>, p:<span class="s">7.32</span>, color:<span class="s">'#E8B84B'</span>, dash:[5,4], label:<span class="s">'警戒线'</span> },
+      { type:<span class="s">'line'</span>,  pts:[[<span class="s">10</span>,<span class="s">6.8</span>],[<span class="s">40</span>,<span class="s">7.6</span>]], color:<span class="s">'#4C8DFF'</span> },
+      { type:<span class="s">'rect'</span>,  x1:<span class="s">20</span>, x2:<span class="s">60</span>, p1:<span class="s">6.24</span>, p2:<span class="s">8.62</span>, fill:<span class="s">'rgba(232,184,75,.06)'</span> },
+      { type:<span class="s">'marker'</span>, i:<span class="s">80</span>, p:<span class="s">8.02</span>, text:<span class="s">'高点'</span>, color:<span class="s">'#F6465D'</span>, pos:<span class="s">'above'</span> }
+    ];
+  },
+
+  <span class="c">// 自动分析：返回 -100 ~ +100 的评分与结论</span>
+  <span class="k">analyze</span>: <span class="f">function</span> (ctx) {
+    <span class="k">const</span> s = ctx.last.c &gt; ctx.ind.ma20[ctx.n - <span class="s">1</span>] ? <span class="s">30</span> : <span class="s">-30</span>;
+    <span class="k">return</span> {
+      score: s,
+      verdict: <span class="s">'一句话总结当前形态'</span>,
+      points: [{ k:<span class="s">'读数'</span>, v:<span class="s">'具体数值'</span> }]
+    };
+  }
+});</pre>
+      <p><b>可用绘制指令</b>：<code>line / hline / vline / rect / marker / label / area</code>。
+      <b>ctx 对象</b>：<code>ctx.data</code>（全部K线）、<code>ctx.ind</code>（全部指标数组）、<code>ctx.last</code>（最后一根）、<code>ctx.view</code>（可视区间）、
+      <code>ctx.isIndex</code>（是否指数）、<code>ctx.idxK</code>（指数波动折算系数，个股恒为 1）、<code>ctx.floatShares</code>（流通股本，指数为 null）。</p>
+      <p><b>指数标的</b>：指数与个股共用同一套流派，但 <code>涨停板 / 龙头战法 / 情绪博弈 / 涨停回踩 20 / 换手率</code> 依赖个股制度（涨跌停、连板、换手率、流通股本），在指数上会自动置灰并从综合评分中剔除。
+      写新流派时如果用到「涨幅 5% 算异动」这类绝对阈值，请乘 <code>ctx.idxK</code>，否则指数上几乎不会触发。</p>
+      <p><b>日线结构类</b>：<code>二买强势反击</code> 的每个条件都按日线根数定义（5 日跌幅 / 150 根窗口 / 20 日均线），周月线上会置灰 —— 这类流派在 <code>DAY_STRUCT</code> 里登记，与依赖涨跌停制度的 <code>DAY_ONLY</code> 分开。</p>
+      <p><b>信号密度控制</b>：<code>ctx.helpers.vspan()</code> 取可视区间 <code>{lo, hi}</code>；
+      <code>ctx.helpers.spread(items, px)</code> 按像素间距稀释同类标记；
+      <code>ctx.helpers.pickMarks(cands, px, lastIdx)</code> 做跨类避让并保证最新一根不被挤掉。
+      信号应覆盖 <code>vspan()</code> 的全部历史，不要写死「最近 N 根」。</p>
+      <p><b>综合评分</b>由引擎按各流派 score 加权平均后再叠加「位置修正」自动得出，权重可在 <code>QuantLab.WEIGHTS</code> 中调整。</p>
+      <p><b>无头模式</b>：<code>QLMount(rows, { headless: true })</code> 不创建 Canvas，只装配指标与流派，返回 <code>analyzeOne(id)</code>。
+      选股器用它逐只计算候选池，与详情页共用同一份代码，因此评分必然一致。</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>服务端接口 · 自选股 / 分组 / 行情</summary>
+    <div class="dev-bd">
+      <p>自选股与分组通过 REST 接口读写，数据落盘在 <code>data/store.json</code>，服务重启后保留。行情由服务端代理公开行情源并做内存缓存（K 线 60s、快照 8s），前端不直连第三方。
+数据源分三家自动降级：同花顺（前复权日线，带成交额）、新浪（全市场列表 / 备用 K 线）、腾讯（实时快照，带量比）。
+东财接口当前不可用，已从主链路移除。</p>
+<pre><span class="c"># 行情</span>
+GET    /api/stock/:code?bars=1200      <span class="c">// K线 + 周月线 + 基准 + 快照</span>
+GET    /api/stock/sh000001?all=1       <span class="c">// 指数全历史（约 20 年）</span>
+GET    /api/screen/market?node=all     <span class="c">// 全市场快照（5350 只，选股用）</span>
+POST   /api/screen/klines              <span class="c">// 候选池批量K线（≤300 只）</span>
+GET    /api/screen/meta                <span class="c">// 各数据源健康度</span>
+GET    /api/indices                    <span class="c">// 主要指数实时行情</span>
+GET    /api/snapshot?codes=600986,000977
+GET    /api/search?q=浙文              <span class="c">// 代码/名称/拼音联想（含指数）</span>
+
+<span class="c"># 自选股</span>
+GET    /api/watchlist                 <span class="c">// 分组 + 股票 + 实时行情，一次拉全</span>
+POST   /api/watchlist                 <span class="c">// { code, groupId }</span>
+PATCH  /api/watchlist/:code           <span class="c">// { groupId } 移动分组</span>
+DELETE /api/watchlist/:code
+
+<span class="c"># 分组</span>
+POST   /api/groups                    <span class="c">// { name }</span>
+PATCH  /api/groups/:id                <span class="c">// { name } 重命名</span>
+DELETE /api/groups/:id?moveTo=xxx     <span class="c">// 删除并把股票迁走</span>
+PUT    /api/groups/order              <span class="c">// { ids: [] } 排序</span></pre>
+      <p><b>新增分组无需改代码</b>：界面右上角 <code>+</code> 直接创建，<code>data/store.json</code> 中按 <code>groups[] / items[]</code> 结构存储，也可直接编辑文件后刷新。</p>
+    </div>
+  </details>
+</div>
+
+<footer>
+  <div class="disclaim">
+    <h4>风险提示与免责声明</h4>
+    <p>本工具所有指标、评分、价位与结论均由公开历史行情经算法自动计算生成，仅用于技术分析方法的演示与研究，不构成任何投资建议或买卖依据。技术分析基于历史数据统计，无法预测未来；个股受公告、政策、板块情绪等非技术因素影响可能剧烈波动。数据来源为公开行情接口，可能存在延迟或误差，请以交易所披露为准。据此操作，风险自担。</p>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+<div class="ctx" id="ctxMenu"></div>
+<div class="sheet-mask" id="sheetMask"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
+
+<script src="/js/indicators.js"></script>
+<script src="/js/engine.js"></script>
+<script src="/js/strategies.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/watchlist.js"></script>
+</body>
+</html>
