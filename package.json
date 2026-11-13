@@ -7,7 +7,9 @@
     "lib": "lib"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node tools/smoke.js",
+    "test:offline": "node tools/smoke.js --offline"
   },
   "keywords": [],
   "author": "",
