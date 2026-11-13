@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>策略实验室 · 高保真原型 · QuantLab</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+/* 页面级布局 */
+.lab-grid{display:grid;gap:var(--sp-4);grid-template-columns:1fr}
+@media (min-width:1100px){ .lab-grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)} }
+.stack{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0}
+.toolbar{display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:center;
+  padding:var(--sp-3) var(--sp-4);border-top:1px solid var(--line)}
+.toolbar .grow{flex:1 1 auto}
+.kpis{display:grid;gap:var(--sp-2);grid-template-columns:1fr 1fr}
+@media (min-width:640px){ .kpis{grid-template-columns:repeat(4,minmax(0,1fr))} }
+.kpi{padding:12px 14px;border-radius:var(--r-md);background:var(--card2);border:1px solid var(--line)}
+.kpi .k{font-size:var(--fs-xs);color:var(--tx3)}
+.kpi .v{font-size:var(--fs-h2);font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.chart-wrap{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--sp-3)}
+.legend-row{display:flex;gap:var(--sp-4);flex-wrap:wrap;font-size:var(--fs-xs);color:var(--tx3);margin-top:var(--sp-2)}
+.legend-row span{display:inline-flex;align-items:center;gap:6px}
+.legend-row i{width:14px;height:2px;border-radius:1px;flex:0 0 auto}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">跳到主内容</a>
+
+<header>
+  <div class="hd">
+    <div class="brand"><div class="logo" aria-hidden="true">QL</div><b>QuantLab</b></div>
+    <nav aria-label="主导航">
+      <a href="today.html">今日一页</a>
+      <a href="watch.html">观察池</a>
+      <a href="lab.html" aria-current="page">策略实验室</a>
+      <a href="analysis.html" class="tool">分析台</a>
+      <a href="screener.html" class="tool">选股器</a>
+    </nav>
+    <div class="hd-status">
+      <span class="tag warn"><span class="dot warn" aria-hidden="true"></span>Python 未就绪</span>
+      <span class="tag">2026-11-13 · 16:35</span>
+    </div>
+  </div>
+</header>
+
+<div class="note">
+  <div role="note">设计原型 · 示意数据。五个 tab 均可切换（支持 ← → 方向键）；编辑器可直接输入；五道闸的 <b>✓ / ✗ / ! / —</b> 四态含义不同，注意区分。</div>
+</div>
+
+<main id="main">
+  <div class="page-hd">
+    <h1 id="page-title">策略实验室</h1>
+    <p>4 个策略 · 1 个已上线 · 最近验证 2026-11-12</p>
+  </div>
+
+  <div class="card">
+    <div class="tabs" role="tablist" aria-label="策略实验室视图">
+      <button role="tab" id="t-list" aria-selected="true" aria-controls="p-list" tabindex="0">策略列表 <span class="cnt">4</span></button>
+      <button role="tab" id="t-edit" aria-selected="false" aria-controls="p-edit" tabindex="-1">编辑器</button>
+      <button role="tab" id="t-gate" aria-selected="false" aria-controls="p-gate" tabindex="-1">验证 <span class="cnt">存疑</span></button>
+      <button role="tab" id="t-sig" aria-selected="false" aria-controls="p-sig" tabindex="-1">信号跟踪</button>
+      <button role="tab" id="t-batch" aria-selected="false" aria-controls="p-batch" tabindex="-1">批量回测</button>
+    </div>
+
+    <!-- ========== 1. 策略列表 ========== -->
+    <div role="tabpanel" id="p-list" aria-labelledby="t-list" tabindex="0">
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <caption>全部策略（版本号递增，旧版本保留在档案中）</caption>
+          <thead>
+            <tr>
+              <th>策略</th><th>类型</th><th class="r">版本</th><th>状态</th>
+              <th>最近验证</th><th class="r">实盘命中</th><th class="r">回测命中</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="strong">布林突破</td>
+              <td class="muted">公式</td>
+              <td class="r">v3</td>
+              <td><span class="st st-active">已上线</span></td>
+              <td><span class="chip chip-warn" style="margin:0">存疑</span></td>
+              <td class="r strong">48%</td>
+              <td class="r muted">52%</td>
+              <td class="r"><button class="btn btn-sm" type="button" data-gate="布林突破 v3">查看</button></td>
+            </tr>
+            <tr>
+              <td class="strong">均线突破</td>
+              <td class="muted">公式</td>
+              <td class="r">v2</td>
+              <td><span class="st st-testing">验证中</span></td>
+              <td><span class="chip chip-ok" style="margin:0">可用</span></td>
+              <td class="r muted">—</td>
+              <td class="r muted">—</td>
+              <td class="r"><button class="btn btn-sm" type="button" data-gate="均线突破 v2">查看</button></td>
+            </tr>
+            <tr>
+              <td class="strong">三把锁低吸</td>
+              <td class="muted">Python</td>
+              <td class="r">v5</td>
+              <td><span class="st st-suspect">已降级</span></td>
+              <td><span class="chip chip-bad" style="margin:0">不可用</span></td>
+              <td class="r strong">41%</td>
+              <td class="r muted">63%</td>
+              <td class="r"><button class="btn btn-sm" type="button" data-gate="三把锁低吸 v5">查看</button></td>
+            </tr>
+            <tr>
+              <td class="strong">涨停回踩</td>
+              <td class="muted">公式</td>
+              <td class="r">v1</td>
+              <td><span class="st st-draft">草稿</span></td>
+              <td class="muted">未验证</td>
+              <td class="r muted">—</td>
+              <td class="r muted">—</td>
+              <td class="r"><button class="btn btn-sm" type="button" data-gate="涨停回踩 v1（尚未跑闸）">查看</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:var(--sp-4);border-top:1px solid var(--line)">
+        <p style="font-size:var(--fs-xs);color:var(--tx3);line-height:1.7">
+          注意「三把锁低吸」：回测命中 63%，实盘只有 41%，差距 22 个点已超过 15% 的降级阈值，
+          系统自动标为「已降级」。<b style="color:var(--tx2)">回测再好，实盘对不上就是有问题。</b>
+        </p>
+      </div>
+    </div>
+
+    <!-- ========== 2. 编辑器 ========== -->
+    <div role="tabpanel" id="p-edit" aria-labelledby="t-edit" tabindex="0" hidden>
+      <div class="lab-grid" style="padding:var(--sp-4)">
+        <div class="stack">
+          <div class="row2">
+            <div class="field">
+              <label for="f-name">策略名</label>
+              <input id="f-name" type="text" value="布林突破">
+            </div>
+            <div class="field">
+              <label for="f-type">类型</label>
+              <select id="f-type">
+                <option selected>公式（通达信源码）</option>
+                <option>Python 脚本</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="code">公式源码</label>
+            <div class="editor">
+              <div class="gutter" id="gutter" aria-hidden="true"></div>
+              <textarea id="code" spellcheck="false" aria-describedby="code-hint">{
+  布林通道·收敛后突破
+  中轨 20 日，上下轨 ±2 倍标准差
+}
+MID:=MA(C,20);
+STD20:=STD(C,20);
+UP:=MID+2*STD20;
+DN:=MID-2*STD20;
+BW:=(UP-DN)/MID;
+
+{带宽收敛后放大，且收盘突破上轨}
+CONVERGE:=BW < REF(HHV(BW,20),1) * 0.8;
+BUY:CROSS(C,UP) AND CONVERGE;</textarea>
+            </div>
+            <p id="code-hint" style="font-size:var(--fs-xs);color:var(--tx3)">
+              支持通达信语法。已内置 STD / EXIST / VALUEWHEN / BARSSINCE 等 45+ 函数。
+            </p>
+          </div>
+
+          <div class="row2">
+            <div class="field">
+              <label for="f-line">信号输出线（必选）</label>
+              <select id="f-line">
+                <option>BUY</option>
+                <option>UP</option>
+                <option>DN</option>
+                <option>BW</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-ver">版本</label>
+              <input id="f-ver" type="text" value="v4（保存后自动 +1）" readonly>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card" style="background:var(--card2)">
+            <div class="card-hd"><h3>未来函数扫描</h3><span class="chip chip-warn">2 项中危</span></div>
+            <div class="card-bd scan">
+              <div class="scan-item mid">
+                <span aria-hidden="true">!</span>
+                <span><b>HHV(BW,20)</b> 未命中风险；但若改成 <b>HHV(BW,0)</b> 会随新数据回溯变化，历史信号会漂移。</span>
+              </div>
+              <div class="scan-item mid">
+                <span aria-hidden="true">!</span>
+                <span><b>REF(HHV(BW,20),1)</b> 正确（引用昨日），未使用未来数据。</span>
+              </div>
+              <div class="scan-item lo">
+                <span aria-hidden="true">?</span>
+                <span>未检测到 HIGH 危函数（BACKSET / ZIG / PEAK 等）。</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="background:var(--card2)">
+            <div class="card-hd"><h3>语法检查</h3><span class="chip chip-ok">通过</span></div>
+            <div class="card-bd" style="font-size:var(--fs-xs);color:var(--tx2);line-height:1.7">
+              解析 9 条语句，输出线 2 条（BW / BUY）。<br>
+              未定义标识符：无。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <span style="font-size:var(--fs-xs);color:var(--tx3)" id="save-at">上次保存 2026-11-12 21:04</span>
+        <span class="grow"></span>
+        <button class="btn" type="button" id="btn-scan">再扫一次</button>
+        <button class="btn btn-primary" type="button" id="btn-save">保存为 v4</button>
+      </div>
+    </div>
+
+    <!-- ========== 3. 验证（五道闸） ========== -->
+    <div role="tabpanel" id="p-gate" aria-labelledby="t-gate" tabindex="0" hidden>
+      <div style="padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-4)">
+        <div class="verdict-box">
+          <span class="big" style="color:var(--gold)">存疑</span>
+          <span class="why">
+            <b style="color:var(--tx)">当前策略：<span id="gate-name">布林突破 v3</span></b><br>
+            第 ④ 道闸无法检验（熊市段样本不足 60 日），因此不给「可用」。
+            <b style="color:var(--tx)">无法检验 ≠ 通过</b>——这是三态里最容易被误读的一档。
+          </span>
+        </div>
+
+        <div class="gates">
+          <div class="gate pass">
+            <span class="ico" aria-hidden="true">✓</span>
+            <div class="body">
+              <div class="t">① 未来函数</div>
+              <div class="d">静态扫描 + 加数据重算不变性：用 1200 根与 1220 根分别计算，前 1200 个信号完全一致。</div>
+              <div class="figs"><span>高危 <b>0</b></span><span>中危 <b>2</b></span><span>不变性 <b>通过</b></span></div>
+            </div>
+          </div>
+
+          <div class="gate pass">
+            <span class="ico" aria-hidden="true">✓</span>
+            <div class="body">
+              <div class="t">② 样本内外</div>
+              <div class="d">前 70% 训练、后 30% 检验，收益衰减 42%，低于 50% 阈值。</div>
+              <div class="figs"><span>样本内 <b>+31%</b></span><span>样本外 <b>+18%</b></span><span>衰减 <b>42%</b></span></div>
+            </div>
+          </div>
+
+          <div class="gate pass">
+            <span class="ico" aria-hidden="true">✓</span>
+            <div class="body">
+              <div class="t">③ 普适性</div>
+              <div class="d">随机抽 50 只标的（固定种子），32 只正收益。</div>
+              <div class="figs"><span>正收益 <b>32/50</b></span><span>占比 <b>64%</b></span><span>门槛 <b>50%</b></span></div>
+            </div>
+          </div>
+
+          <div class="gate na">
+            <span class="ico" aria-hidden="true">!</span>
+            <div class="body">
+              <div class="t">④ 牛熊分段 <span class="chip chip-warn" style="margin:0">无法检验</span></div>
+              <div class="d">熊市段可用样本仅 47 个交易日，低于 60 日门槛，不给结论。</div>
+              <div class="figs"><span>牛市 <b>+28%</b></span><span>震荡 <b>+9%</b></span><span>熊市 <b>样本不足</b></span></div>
+            </div>
+          </div>
+
+          <div class="gate na">
+            <span class="ico" aria-hidden="true">—</span>
+            <div class="body">
+              <div class="t">⑤ 双轨一致</div>
+              <div class="d">当前只有公式版，没有 Python 版可对账，不适用。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="background:var(--card2)">
+          <div class="card-hd"><h3>关键指标</h3></div>
+          <div class="card-bd">
+            <div class="kpis">
+              <div class="kpi"><div class="k">交易笔数</div><div class="v num">84</div></div>
+              <div class="kpi"><div class="k">胜率</div><div class="v num">52%</div></div>
+              <div class="kpi"><div class="k">最大回撤</div><div class="v num" style="color:var(--up2)">18%</div></div>
+              <div class="kpi"><div class="k">夏普</div><div class="v num">1.12</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 4. 信号跟踪 ========== -->
+    <div role="tabpanel" id="p-sig" aria-labelledby="t-sig" tabindex="0" hidden>
+      <div style="padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-4)">
+        <div>
+          <h2 class="sect-h">实盘 vs 回测 累计命中率</h2>
+          <div class="chart-wrap">
+            <svg viewBox="0 0 600 180" width="100%" role="img"
+                 aria-label="实盘命中率曲线低于回测，且差距在扩大：回测 52%，实盘 48%">
+              <!-- 网格 -->
+              <g stroke="#1A2230" stroke-width="1">
+                <line x1="40" y1="20" x2="580" y2="20"/>
+                <line x1="40" y1="60" x2="580" y2="60"/>
+                <line x1="40" y1="100" x2="580" y2="100"/>
+                <line x1="40" y1="140" x2="580" y2="140"/>
+              </g>
+              <g fill="#828FA5" font-size="11" font-family="sans-serif">
+                <text x="8" y="24">80%</text>
+                <text x="8" y="64">60%</text>
+                <text x="8" y="104">40%</text>
+                <text x="8" y="144">20%</text>
+              </g>
+              <!-- 回测线（虚线，稳定在上方） -->
+              <polyline fill="none" stroke="#6BA5FF" stroke-width="2" stroke-dasharray="5 4"
+                points="40,88 130,84 220,80 310,76 400,74 490,72 580,70"/>
+              <!-- 实盘线（实线，逐步走低并拉开差距） -->
+              <polyline fill="none" stroke="#F6465D" stroke-width="2"
+                points="40,86 130,88 220,92 310,96 400,100 490,103 580,106"/>
+              <g fill="#F6465D" font-size="11" font-family="sans-serif">
+                <text x="540" y="122">实盘 48%</text>
+              </g>
+              <g fill="#6BA5FF" font-size="11" font-family="sans-serif">
+                <text x="540" y="62">回测 52%</text>
+              </g>
+            </svg>
+            <div class="legend-row">
+              <span><i style="background:#6BA5FF"></i>回测命中率（虚线）</span>
+              <span><i style="background:#F6465D"></i>实盘命中率（实线）</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <caption>最近信号与跟踪结果（T+N 按交易日计）</caption>
+            <thead>
+              <tr><th>日期</th><th>标的</th><th class="r">信号价</th><th class="r">T+1</th><th class="r">T+5</th><th class="r">T+10</th><th>结果</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="muted">11-13</td><td class="strong">沪电股份</td><td class="r">38.42</td><td class="r up">+2.4%</td><td class="r muted">待回填</td><td class="r muted">待回填</td><td><span class="chip chip-ok" style="margin:0">命中</span></td></tr>
+              <tr><td class="muted">11-13</td><td class="strong">德赛西威</td><td class="r">118.30</td><td class="r up">+1.1%</td><td class="r muted">待回填</td><td class="r muted">待回填</td><td><span class="chip chip-ok" style="margin:0">命中</span></td></tr>
+              <tr><td class="muted">11-12</td><td class="strong">中际旭创</td><td class="r">142.60</td><td class="r up">+1.8%</td><td class="r up">+4.2%</td><td class="r muted">待回填</td><td><span class="chip chip-ok" style="margin:0">命中</span></td></tr>
+              <tr><td class="muted">11-11</td><td class="strong">沪光股份</td><td class="r">26.15</td><td class="r dn">−0.6%</td><td class="r dn">−2.1%</td><td class="r dn">−3.4%</td><td><span class="chip chip-bad" style="margin:0">未命中</span></td></tr>
+              <tr><td class="muted">11-10</td><td class="strong">拓普集团</td><td class="r">52.80</td><td class="r up">+0.9%</td><td class="r up">+2.6%</td><td class="r up">+5.1%</td><td><span class="chip chip-ok" style="margin:0">命中</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="invalid">
+          <h3 class="sect-h">降级提示</h3>
+          <ul>
+            <li>实盘命中率低于回测超过 15 个百分点时，策略自动转为「存疑」并持续跟踪</li>
+            <li>当前差距 4 个点，仍在容忍区间</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 5. 批量回测 ========== -->
+    <div role="tabpanel" id="p-batch" aria-labelledby="t-batch" tabindex="0" hidden>
+      <div style="padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-4)">
+        <div class="kpis">
+          <div class="kpi"><div class="k">测试标的</div><div class="v num">50</div></div>
+          <div class="kpi"><div class="k">正收益</div><div class="v num" style="color:var(--dn2)">32</div></div>
+          <div class="kpi"><div class="k">平均收益</div><div class="v num" style="color:var(--up2)">+8.2%</div></div>
+          <div class="kpi"><div class="k">回撤中位</div><div class="v num">−12.4%</div></div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <caption>表现最好与最差的 6 只（完整结果可导出 CSV）</caption>
+            <thead>
+              <tr><th>标的</th><th class="r">交易</th><th class="r">胜率</th><th class="r">收益</th><th class="r">最大回撤</th><th>分段</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="strong">中际旭创</td><td class="r">9</td><td class="r">67%</td><td class="r up">+31.4%</td><td class="r">−9.2%</td><td><span class="chip chip-ok" style="margin:0">三段皆正</span></td></tr>
+              <tr><td class="strong">沪电股份</td><td class="r">11</td><td class="r">64%</td><td class="r up">+24.8%</td><td class="r">−11.1%</td><td><span class="chip chip-ok" style="margin:0">三段皆正</span></td></tr>
+              <tr><td class="strong">新易盛</td><td class="r">8</td><td class="r">63%</td><td class="r up">+19.2%</td><td class="r">−10.4%</td><td><span class="chip chip-ok" style="margin:0">三段皆正</span></td></tr>
+              <tr><td class="strong">中国巨石</td><td class="r">10</td><td class="r">40%</td><td class="r dn">−8.6%</td><td class="r">−18.3%</td><td><span class="chip chip-warn" style="margin:0">熊市亏损</span></td></tr>
+              <tr><td class="strong">旗滨集团</td><td class="r">7</td><td class="r">29%</td><td class="r dn">−12.1%</td><td class="r">−21.0%</td><td><span class="chip chip-bad" style="margin:0">熊市重亏</span></td></tr>
+              <tr><td class="strong">三安光电</td><td class="r">12</td><td class="r">33%</td><td class="r dn">−15.4%</td><td class="r">−23.6%</td><td><span class="chip chip-bad" style="margin:0">熊市重亏</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card" style="background:var(--card2)">
+          <div class="card-hd"><h3>未参与统计的标的</h3><span class="chip chip-c">3 只</span></div>
+          <div class="card-bd" style="font-size:var(--fs-xs);color:var(--tx2);line-height:1.8">
+            数据不足被排除，<b style="color:var(--tx)">不计入分母</b>（分母永远只算有效样本）：<br>
+            · 430047 诺思兰德 —— 上市不足 120 个交易日<br>
+            · 688981 中芯国际 —— K 线存在整年缺口，质量标记不可用<br>
+            · 001358 兴欣新材 —— 停牌超过 20 个交易日
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="disclaim">
+    <h4>免责声明</h4>
+    <p>回测结果基于历史数据，不代表未来收益。策略上线前须通过五道闸，「存疑」与「不可用」均不建议实盘。所有结论仅供参考，不构成投资建议。股市有风险，投资需谨慎。</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function select(i){
+    tabs.forEach(function(t, k){
+      var on = k === i;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    tabs[i].focus();
+  }
+  tabs.forEach(function(t, i){
+    t.addEventListener('click', function(){ select(i); });
+    t.addEventListener('keydown', function(e){
+      var n = null;
+      if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') n = 0;
+      else if (e.key === 'End') n = tabs.length - 1;
+      if (n !== null) { e.preventDefault(); select(n); }
+    });
+  });
+
+  /* 行号同步 */
+  var code = document.getElementById('code');
+  var gutter = document.getElementById('gutter');
+  function renderGutter(){
+    var lines = code.value.split('\n').length;
+    var out = '';
+    for (var i = 1; i <= lines; i++) out += '<div>' + i + '</div>';
+    gutter.innerHTML = out;
+  }
+  code.addEventListener('input', renderGutter);
+  renderGutter();
+
+  /* Tab 键在编辑器内插入两个空格，而不是跳出 */
+  code.addEventListener('keydown', function(e){
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      var s = this.selectionStart, en = this.selectionEnd;
+      this.value = this.value.slice(0, s) + '  ' + this.value.slice(en);
+      this.selectionStart = this.selectionEnd = s + 2;
+      renderGutter();
+    }
+  });
+
+  /* ---------- 无障碍播报 ---------- */
+  function announce(msg){
+    var r = document.createElement('div');
+    r.setAttribute('role', 'status');
+    r.className = 'sr-only';
+    r.textContent = msg;
+    document.body.appendChild(r);
+    setTimeout(function(){ r.remove(); }, 1800);
+  }
+
+  /* ---------- 策略列表「查看」→ 跳到验证 tab ---------- */
+  document.querySelectorAll('[data-gate]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var name = btn.dataset.gate;
+      document.getElementById('gate-name').textContent = name;
+      select(2);                                   // 验证 tab 的索引
+      announce('已切到验证：' + name);
+    });
+  });
+
+  /* ---------- 再扫一次 ---------- */
+  var btnScan = document.getElementById('btn-scan');
+  var scanCard = btnScan.closest('.lab-grid').querySelector('.scan');
+  var scanCopy = scanCard.innerHTML;
+  btnScan.addEventListener('click', function(){
+    btnScan.disabled = true;
+    scanCard.innerHTML = '<div class="scan-item lo"><span aria-hidden="true">…</span>' +
+                         '<span>正在扫描：静态 AST 遍历 + 加数据重算不变性检查</span></div>';
+    announce('开始扫描');
+    setTimeout(function(){
+      scanCard.innerHTML = scanCopy;
+      btnScan.disabled = false;
+      announce('扫描完成，2 项中危，0 项高危');
+    }, 900);
+  });
+
+  /* ---------- 保存为 v4 ---------- */
+  var btnSave = document.getElementById('btn-save');
+  var verField = document.getElementById('f-ver');
+  btnSave.addEventListener('click', function(){
+    var n = parseInt(verField.value.replace(/\D/g, ''), 10) || 4;
+    var next = n + 1;
+    verField.value = 'v' + next + '（已保存，可继续编辑）';
+    btnSave.textContent = '已保存 v' + n;
+    btnSave.disabled = true;
+    var d = new Date();
+    document.getElementById('save-at').textContent =
+      '上次保存 ' + d.getFullYear() + '-' +
+      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0') + ' ' +
+      String(d.getHours()).padStart(2, '0') + ':' +
+      String(d.getMinutes()).padStart(2, '0');
+    announce('已保存为 v' + n + '，旧版本保留在档案中');
+    setTimeout(function(){
+      btnSave.textContent = '保存为 v' + next;
+      btnSave.disabled = false;
+    }, 1600);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型索引 · QuantLab</title>
+<link rel="stylesheet" href="proto.css">
+</head>
+<body>
+
+<a class="skip" href="#main">跳到主内容</a>
+
+<header>
+  <div class="hd">
+    <div class="brand"><div class="logo" aria-hidden="true">QL</div><b>QuantLab</b></div>
+    <nav aria-label="主导航">
+      <a href="today.html">今日一页</a>
+      <a href="watch.html">观察池</a>
+      <a href="lab.html">策略实验室</a>
+      <a href="#" class="tool">分析台</a>
+      <a href="#" class="tool">选股器</a>
+    </nav>
+    <div class="hd-status">
+      <span class="tag">原型 v1 · 2026-11-13</span>
+    </div>
+  </div>
+</header>
+
+<div class="note">
+  <div role="note">
+    这是四期界面的高保真原型。<b>页面内数字全部为示意数据</b>，用于验证信息结构与交互；开发不得把数字带进代码。
+    三页共用 <code style="font-size:inherit">proto.css</code>，令牌与规范见 <code style="font-size:inherit">docs/frontend-audit-and-design-spec.md</code>。
+  </div>
+</div>
+
+<main id="main">
+  <div class="page-hd">
+    <h1>界面原型</h1>
+    <p>3 个入口 + 2 个工具页 · 对应 docs/dev/06-phase4-ui.md 的信息架构</p>
+  </div>
+
+  <h2 class="sect-h" style="font-size:var(--fs-xs);letter-spacing:.8px">主入口 · 每天用</h2>
+  <div class="hub">
+    <a class="hub-card" href="today.html">
+      <span class="t">今日一页</span>
+      <span class="d">
+        七格决策总览。①环境与⑥对账置顶（环境不对后面全白费；昨天没复盘今天不会更准），
+        ②③④并列，⑤⑦收尾。七格全部可下钻。
+      </span>
+      <span class="tags">
+        <span class="chip chip-a" style="margin:0">七格</span>
+        <span class="chip chip-b" style="margin:0">三态切换</span>
+        <span class="chip chip-c" style="margin:0">12 列栅格</span>
+      </span>
+    </a>
+
+    <a class="hub-card" href="watch.html">
+      <span class="t">观察池</span>
+      <span class="d">
+        标的生命周期管理。900px 上下切换表格与卡片；停留超 80% 标黄；
+        点详情看状态时间轴、入池以来走势、同板块对比；移出必须选原因。
+      </span>
+      <span class="tags">
+        <span class="chip chip-b" style="margin:0">状态机</span>
+        <span class="chip chip-warn" style="margin:0">必填原因</span>
+        <span class="chip chip-c" style="margin:0">抽屉</span>
+      </span>
+    </a>
+
+    <a class="hub-card" href="lab.html">
+      <span class="t">策略实验室</span>
+      <span class="d">
+        五个 tab：列表 / 编辑器 / 验证 / 信号 / 批量。可编辑公式并实时看行号；
+        五道闸用 ✓ ✗ ! — 四态区分「通过／不通过／无法检验／不适用」。
+      </span>
+      <span class="tags">
+        <span class="chip chip-c" style="margin:0">公式编辑器</span>
+        <span class="chip chip-ok" style="margin:0">五道闸</span>
+        <span class="chip chip-b" style="margin:0">双曲线</span>
+      </span>
+    </a>
+  </div>
+
+  <h2 class="sect-h" style="font-size:var(--fs-xs);letter-spacing:.8px;margin-top:var(--sp-6)">工具页 · 按需下钻</h2>
+  <div class="hub" style="margin-top:var(--sp-3)">
+    <a class="hub-card" href="analysis.html">
+      <span class="t">分析台</span>
+      <span class="d">
+        单票 K 线细看。40 个流派 Tab 支持搜索过滤与 ←→ 方向键导航；
+        蜡烛图含 MA20/MA60 与成交量；流派解读与评分总览双向对应。
+      </span>
+      <span class="tags">
+        <span class="chip chip-c" style="margin:0">40 流派</span>
+        <span class="chip chip-a" style="margin:0">K 线</span>
+        <span class="chip chip-b" style="margin:0">键盘导航</span>
+      </span>
+    </a>
+
+    <a class="hub-card" href="screener.html">
+      <span class="t">选股器</span>
+      <span class="d">
+        三层筛选：行情条件 → 形态全池判定 → 流派精算。漏斗把每层分母写清，
+        让「不截断」可见；含扫描进度、空态与导出。
+      </span>
+      <span class="tags">
+        <span class="chip chip-b" style="margin:0">三层漏斗</span>
+        <span class="chip chip-ok" style="margin:0">进度可见</span>
+        <span class="chip chip-c" style="margin:0">导出</span>
+      </span>
+    </a>
+
+    <div class="hub-card" style="cursor:default">
+      <span class="t" style="color:var(--tx3)">（预留）</span>
+      <span class="d">
+        按 docs/dev/06，不再新增顶层页面。新能力以「今日一页的一格」或下钻形态存在——
+        这条约束写进文档，是为了防止界面再次膨胀成 22 个页面。
+      </span>
+      <span class="tags">
+        <span class="chip chip-d" style="margin:0">不再加页</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:var(--sp-6)">
+    <div class="card-hd"><h2>怎么验证这份原型</h2></div>
+    <div class="card-bd" style="display:flex;flex-direction:column;gap:var(--sp-3);font-size:var(--fs-sm);color:var(--tx2);line-height:1.75">
+      <p><b style="color:var(--tx)">1. 只用键盘走一遍。</b>
+        Tab 从头到尾，每个可点元素都该有蓝色焦点环；在今日一页里打开抽屉后，Tab 不该跑到背后的页面，
+        按 Esc 关闭后焦点应回到触发它的那个按钮。</p>
+      <p><b style="color:var(--tx)">2. 缩到 320px。</b>
+        不应出现横向滚动；七格变单列；观察池表格变卡片；按钮仍可点（≥44px）。</p>
+      <p><b style="color:var(--tx)">3. 切换数据状态。</b>
+        今日一页底部的控制条切到「试用数据不完整」——看看结论变灰但内容仍在；
+        切到「三期未上线」——③ 时机格应显示"需策略实验室就绪"，而不是 0。</p>
+      <p><b style="color:var(--tx)">4. 打开系统的「减少动态效果」。</b>
+        页面不该再有任何过渡动画。</p>
+      <p><b style="color:var(--tx)">5. 分析台的 40 个流派 Tab。</b>
+        在搜索框输「MACD」应只剩匹配项；用 ← → 键在可见项之间移动，Home/End 跳首尾；
+        选中项会自动滚到可视区中间。</p>
+      <p><b style="color:var(--tx)">6. 选股器的漏斗。</b>
+        五格数字必须能说明"从 5342 怎么筛到 47"；扫描按钮点下去要显示真实进度，
+        不许只有"加载中"三个字。</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="disclaim">
+    <h4>免责声明</h4>
+    <p>本原型为界面设计交付物，不含真实行情。所有判断、评分、信号均为示意，不构成投资建议。</p>
+  </div>
+</footer>
+
+</body>
+</html>

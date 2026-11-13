@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>观察池 · 高保真原型 · QuantLab</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+/* 列表专用布局（页面级，不进共享表） */
+.list{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+.list-head{display:none}
+.row{
+  display:grid;grid-template-columns:1fr auto;gap:var(--sp-2);
+  padding:14px var(--sp-4);border-bottom:1px solid var(--line);align-items:center;
+}
+.row:last-child{border-bottom:none}
+.row:hover{background:rgba(255,255,255,.015)}
+.row .code{font-size:var(--fs-xs);color:var(--tx3);font-variant-numeric:tabular-nums}
+.row .name{font-size:var(--fs-sm);font-weight:600;margin-left:6px}
+.row .meta{grid-column:1 / -1;display:flex;gap:var(--sp-3);flex-wrap:wrap;
+  font-size:var(--fs-xs);color:var(--tx3);margin-top:2px}
+.row .meta b{color:var(--tx2);font-weight:600;font-variant-numeric:tabular-nums}
+.row .act{display:flex;gap:6px;align-items:center}
+@media (min-width:900px){
+  .list-head{
+    display:grid;grid-template-columns:92px minmax(0,1fr) 118px 96px 116px 72px 148px;
+    gap:var(--sp-2);padding:10px var(--sp-4);font-size:var(--fs-xs);
+    color:var(--tx3);font-weight:600;border-bottom:1px solid var(--line);background:var(--card2);
+  }
+  .row{grid-template-columns:92px minmax(0,1fr) 118px 96px 116px 72px 148px;
+       padding:10px var(--sp-4);font-size:var(--fs-sm)}
+  .row .meta{display:none}
+  .row .act{justify-content:flex-end}
+}
+/* 停留进度 */
+.stay{display:flex;flex-direction:column;gap:3px;min-width:0}
+.stay .t{font-size:var(--fs-xs);color:var(--tx2);font-variant-numeric:tabular-nums}
+.stay .t.near{color:var(--gold);font-weight:600}
+.stay .bar{height:4px;border-radius:2px;background:var(--card2);overflow:hidden}
+.stay .bar i{display:block;height:100%;background:var(--tx3);border-radius:2px}
+.stay .bar i.near{background:var(--gold)}
+.stay .bar i.done{background:var(--dn2)}
+.stay .t.done{color:var(--dn2)}
+/* 计数条 */
+.tally{display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-4)}
+.tally-item{
+  flex:1 1 96px;min-width:86px;padding:10px 12px;border-radius:var(--r-md);
+  background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;gap:2px;
+}
+.tally-item .n{font-size:var(--fs-h2);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+.tally-item .l{font-size:var(--fs-xs);color:var(--tx3)}
+.tally-item.watching .n{color:var(--tx2)}
+.tally-item.ambush .n{color:var(--cyan)}
+.tally-item.confirmed .n{color:var(--gold)}
+.tally-item.holding .n{color:var(--dn2)}
+/* 原因分布 */
+.reason-grid{display:grid;gap:var(--sp-2);grid-template-columns:1fr}
+@media (min-width:640px){ .reason-grid{grid-template-columns:repeat(4,minmax(0,1fr))} }
+.reason-item{padding:12px 14px;border-radius:var(--r-md);background:var(--card2);border:1px solid var(--line)}
+.reason-item .n{font-size:var(--fs-h2);font-weight:700;font-variant-numeric:tabular-nums}
+.reason-item .l{font-size:var(--fs-xs);color:var(--tx3);margin-top:2px}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">跳到主内容</a>
+
+<header>
+  <div class="hd">
+    <div class="brand"><div class="logo" aria-hidden="true">QL</div><b>QuantLab</b></div>
+    <nav aria-label="主导航">
+      <a href="today.html">今日一页</a>
+      <a href="watch.html" aria-current="page">观察池</a>
+      <a href="lab.html">策略实验室</a>
+      <a href="analysis.html" class="tool">分析台</a>
+      <a href="screener.html" class="tool">选股器</a>
+    </nav>
+    <div class="hd-status">
+      <span class="tag ok"><span class="dot" aria-hidden="true"></span>数据完整</span>
+      <span class="tag">2026-11-13 · 16:35 更新</span>
+    </div>
+  </div>
+</header>
+
+<div class="note">
+  <div role="note">设计原型 · 示意数据。重点看：① 900px 上下表格↔卡片切换 ② 停留超 80% 自动标黄 ③ 点「详情」看状态时间轴与走势 ④ 点「移出」看必选原因对话框</div>
+</div>
+
+<main id="main">
+  <div class="page-hd">
+    <h1 id="page-title">观察池</h1>
+    <p>共 6 只在池 · 累计移出 19 只 · 最近更新 2026-11-13 16:35</p>
+  </div>
+
+  <div class="tally" role="list" aria-label="各状态数量">
+    <div class="tally-item watching" role="listitem"><span class="n num">2</span><span class="l">待观察</span></div>
+    <div class="tally-item ambush" role="listitem"><span class="n num">2</span><span class="l">埋伏</span></div>
+    <div class="tally-item confirmed" role="listitem"><span class="n num">1</span><span class="l">启动确认</span></div>
+    <div class="tally-item holding" role="listitem"><span class="n num">1</span><span class="l">持有</span></div>
+  </div>
+
+  <!-- 选项卡：全部 / 已移出 -->
+  <div class="card">
+    <div class="tabs" role="tablist" aria-label="观察池视图">
+      <button role="tab" id="tab-in" aria-selected="true" aria-controls="panel-in" tabindex="0">
+        在池 <span class="cnt">6</span>
+      </button>
+      <button role="tab" id="tab-out" aria-selected="false" aria-controls="panel-out" tabindex="-1">
+        已移出 <span class="cnt">19</span>
+      </button>
+    </div>
+
+    <!-- 在池 -->
+    <div role="tabpanel" id="panel-in" aria-labelledby="tab-in" tabindex="0">
+      <div class="list" role="table" aria-label="在池标的">
+        <div class="list-head" role="row">
+          <span role="columnheader">代码</span>
+          <span role="columnheader">名称</span>
+          <span role="columnheader">状态</span>
+          <span role="columnheader">板块</span>
+          <span role="columnheader">停留</span>
+          <span role="columnheader">评分</span>
+          <span role="columnheader"><span class="sr-only">操作</span></span>
+        </div>
+
+        <div class="row" role="row">
+          <span class="code" role="cell">600986</span>
+          <span role="cell"><span class="name">浙文互联</span>
+            <span class="meta"><span>入池 11-10 · 3 天</span><span>板块 <b>B 蓄势</b></span></span>
+          </span>
+          <span role="cell"><span class="st st-ambush">埋伏</span></span>
+          <span role="cell"><span class="chip chip-b" style="margin:0">B 蓄势</span></span>
+          <span role="cell"><span class="stay"><span class="t num">3 / 15 天</span><span class="bar"><i style="width:20%"></i></span></span></span>
+          <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">74</span>
+          <span role="cell" class="act">
+            <button class="btn btn-sm" type="button" data-detail="600986">详情</button>
+            <button class="btn btn-sm btn-danger" type="button" data-remove="600986 浙文互联" data-auto="too_slow">移出</button>
+          </span>
+        </div>
+
+        <div class="row" role="row">
+          <span class="code" role="cell">002384</span>
+          <span role="cell"><span class="name">东山精密</span>
+            <span class="meta"><span>入池 10-28 · 12 天</span><span>板块 <b>A 主攻</b></span></span>
+          </span>
+          <span role="cell"><span class="st st-confirmed">启动确认</span></span>
+          <span role="cell"><span class="chip chip-a" style="margin:0">A 主攻</span></span>
+          <span role="cell"><span class="stay"><span class="t num near">4 / 5 天</span><span class="bar"><i class="near" style="width:80%"></i></span></span></span>
+          <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">86</span>
+          <span role="cell" class="act">
+            <button class="btn btn-sm" type="button" data-detail="002384">详情</button>
+            <button class="btn btn-sm btn-danger" type="button" data-remove="002384 东山精密" data-auto="logic_broken">移出</button>
+          </span>
+        </div>
+
+        <div class="row" role="row">
+          <span class="code" role="cell">600176</span>
+          <span role="cell"><span class="name">中国巨石</span>
+            <span class="meta"><span>入池 11-11 · 2 天</span><span>板块 <b>D 退潮</b></span></span>
+          </span>
+          <span role="cell"><span class="st st-watching">待观察</span></span>
+          <span role="cell"><span class="chip chip-d" style="margin:0">D 退潮</span></span>
+          <span role="cell"><span class="stay"><span class="t num">2 / 10 天</span><span class="bar"><i style="width:20%"></i></span></span></span>
+          <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">61</span>
+          <span role="cell" class="act">
+            <button class="btn btn-sm" type="button" data-detail="600176">详情</button>
+            <button class="btn btn-sm btn-danger" type="button" data-remove="600176 中国巨石" data-auto="logic_broken">移出</button>
+          </span>
+        </div>
+
+        <div class="row" role="row">
+          <span class="code" role="cell">300308</span>
+          <span role="cell"><span class="name">中际旭创</span>
+            <span class="meta"><span>入池 10-30 · 10 天</span><span>板块 <b>A 主攻</b></span></span>
+          </span>
+          <span role="cell"><span class="st st-holding">持有</span></span>
+          <span role="cell"><span class="chip chip-a" style="margin:0">A 主攻</span></span>
+          <span role="cell"><span class="stay"><span class="t num done">已持有</span><span class="bar"><i class="done" style="width:100%"></i></span></span></span>
+          <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">91</span>
+          <span role="cell" class="act">
+            <button class="btn btn-sm" type="button" data-detail="300308">详情</button>
+            <button class="btn btn-sm btn-danger" type="button" data-remove="300308 中际旭创" data-auto="replaced">移出</button>
+          </span>
+        </div>
+
+        <div class="row" role="row">
+          <span class="code" role="cell">300251</span>
+          <span role="cell"><span class="name">光线传媒</span>
+            <span class="meta"><span>入池 11-03 · 8 天</span><span>板块 <b>A 主攻</b></span></span>
+          </span>
+          <span role="cell"><span class="st st-watching">待观察</span></span>
+          <span role="cell"><span class="chip chip-a" style="margin:0">A 主攻</span></span>
+          <span role="cell"><span class="stay"><span class="t num near">8 / 10 天</span><span class="bar"><i class="near" style="width:80%"></i></span></span></span>
+          <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">78</span>
+          <span role="cell" class="act">
+            <button class="btn btn-sm" type="button" data-detail="300251">详情</button>
+            <button class="btn btn-sm btn-danger" type="button" data-remove="300251 光线传媒" data-auto="too_slow">移出</button>
+          </span>
+        </div>
+
+        <div class="row" role="row">
+          <span class="code" role="cell">002739</span>
+          <span role="cell"><span class="name">万达电影</span>
+            <span class="meta"><span>入池 10-29 · 11 天</span><span>板块 <b>B 蓄势</b></span></span>
+          </span>
+          <span role="cell"><span class="st st-ambush">埋伏</span></span>
+          <span role="cell"><span class="chip chip-b" style="margin:0">B 蓄势</span></span>
+          <span role="cell"><span class="stay"><span class="t num near">11 / 15 天</span><span class="bar"><i class="near" style="width:73%"></i></span></span></span>
+          <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">72</span>
+          <span role="cell" class="act">
+            <button class="btn btn-sm" type="button" data-detail="002739">详情</button>
+            <button class="btn btn-sm btn-danger" type="button" data-remove="002739 万达电影" data-auto="too_slow">移出</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 已移出 -->
+    <div role="tabpanel" id="panel-out" aria-labelledby="tab-out" tabindex="0" hidden>
+      <div class="card-bd" style="display:flex;flex-direction:column;gap:var(--sp-4)">
+        <div>
+          <h2 class="sect-h">移出原因分布（累计 19 只）</h2>
+          <div class="reason-grid">
+            <div class="reason-item"><div class="n num" style="color:var(--up2)">9</div><div class="l">逻辑破了</div></div>
+            <div class="reason-item"><div class="n num" style="color:var(--gold)">5</div><div class="l">触发太慢</div></div>
+            <div class="reason-item"><div class="n num" style="color:var(--tx2)">2</div><div class="l">被替代</div></div>
+            <div class="reason-item"><div class="n num" style="color:var(--purple)">3</div><div class="l">我判断错了</div></div>
+          </div>
+          <p style="font-size:var(--fs-xs);color:var(--tx3);margin-top:var(--sp-2);line-height:1.6">
+            「逻辑破了」占近一半，说明失效条件设得准；「触发太慢」有 5 只，说明入池门槛偏松。
+            「我判断错了」3 只是最有价值的样本，已进入判断力语料库。
+          </p>
+        </div>
+
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <caption>最近移出的 4 只</caption>
+            <thead>
+              <tr><th>代码</th><th>名称</th><th>移出日</th><th class="r">停留</th><th>原因</th><th class="r">移出后 5 日</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="muted">601636</td><td class="strong">旗滨集团</td><td>2026-11-12</td><td class="r">11 天</td>
+                  <td><span class="chip chip-bad" style="margin:0">逻辑破了</span></td><td class="r dn">−3.2%</td></tr>
+              <tr><td class="muted">000725</td><td class="strong">京东方A</td><td>2026-11-08</td><td class="r">15 天</td>
+                  <td><span class="chip chip-warn" style="margin:0">触发太慢</span></td><td class="r up">+1.1%</td></tr>
+              <tr><td class="muted">002241</td><td class="strong">歌尔股份</td><td>2026-11-05</td><td class="r">7 天</td>
+                  <td><span class="chip chip-c" style="margin:0">我判断错了</span></td><td class="r dn">−5.8%</td></tr>
+              <tr><td class="muted">600703</td><td class="strong">三安光电</td><td>2026-10-30</td><td class="r">9 天</td>
+                  <td><span class="chip chip-c" style="margin:0">被替代</span></td><td class="r up">+0.4%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="disclaim">
+    <h4>免责声明</h4>
+    <p>观察池仅记录待跟踪标的，不代表推荐买入。所有状态由规则自动流转，可人工复核。移出原因进入判断力语料库，仅用于自我复盘。股市有风险，投资需谨慎。</p>
+  </div>
+</footer>
+
+<!-- 详情抽屉 -->
+<dialog class="drawer" id="detail" aria-labelledby="dt-title">
+  <div class="dlg-hd">
+    <h2 id="dt-title">标的详情</h2>
+    <button class="x" type="button" data-close aria-label="关闭">×</button>
+  </div>
+  <div class="dr-bd" id="dt-body"></div>
+</dialog>
+
+<!-- 移出对话框 -->
+<dialog id="rm" aria-labelledby="rm-title" aria-describedby="rm-sub">
+  <form method="dialog">
+    <div class="dlg-hd">
+      <h2 id="rm-title">移出观察池</h2>
+      <button class="x" type="submit" aria-label="关闭">×</button>
+    </div>
+    <div class="dlg-bd">
+      <p class="dlg-sub" id="rm-sub">
+        移出 <b id="rm-target">—</b>。请选择原因——它会进入判断力语料库，比买入记录更有价值。
+      </p>
+      <fieldset class="reasons">
+        <legend>移出原因（必选）</legend>
+        <label class="opt">
+          <input type="radio" name="reason" value="logic_broken">
+          <span class="txt"><span class="t">逻辑破了</span><span class="d">触发了失效条件，如放量跌破 MA20</span></span>
+        </label>
+        <label class="opt">
+          <input type="radio" name="reason" value="too_slow">
+          <span class="txt"><span class="t">触发太慢</span><span class="d">超过最长停留天数仍未启动</span></span>
+        </label>
+        <label class="opt">
+          <input type="radio" name="reason" value="replaced">
+          <span class="txt"><span class="t">被更好的替代</span><span class="d">池内有更强标的，主动换仓</span></span>
+        </label>
+        <label class="opt">
+          <input type="radio" name="reason" value="wrong">
+          <span class="txt"><span class="t">我判断错了</span><span class="d">当初入池的理由本身站不住</span></span>
+        </label>
+      </fieldset>
+      <div class="field">
+        <label for="rm-note">补充说明（选填）</label>
+        <input id="rm-note" type="text" placeholder="例如：把反弹当成了反转" autocomplete="off">
+      </div>
+      <p class="err" id="rm-err" role="alert">请先选择一个原因</p>
+    </div>
+    <div class="dlg-ft">
+      <button class="btn" type="submit" value="cancel">取消</button>
+      <button class="btn btn-primary" type="button" id="rm-ok">确认移出</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+  /* ---------- 选项卡（ARIA + 方向键） ---------- */
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function selectTab(i){
+    tabs.forEach(function(t, k){
+      var sel = k === i;
+      t.setAttribute('aria-selected', sel ? 'true' : 'false');
+      t.tabIndex = sel ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !sel;
+    });
+    tabs[i].focus();
+  }
+  tabs.forEach(function(t, i){
+    t.addEventListener('click', function(){ selectTab(i); });
+    t.addEventListener('keydown', function(e){
+      var n = null;
+      if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') n = 0;
+      else if (e.key === 'End') n = tabs.length - 1;
+      if (n !== null) { e.preventDefault(); selectTab(n); }
+    });
+  });
+
+  /* ---------- 详情抽屉数据 ---------- */
+  var DETAIL = {
+    '600986': {
+      name: '浙文互联', state: '埋伏', code: '600986',
+      entry: '板块 B 档 + 综合评分 74 + 缩量回踩 MA20',
+      invalid: ['放量跌破 MA20（现 7.46 / MA20 7.62）', '3 日内未启动则降级', '板块降至 D 档'],
+      spark: '2,54 8,52 14,55 20,50 26,48 32,51 38,46 44,42 50,44 56,40 62,37 68,39 74,34 80,30 86,32 92,27 98,24 104,26 110,22 116,20 122,23 128,18',
+      peers: [['300251','光线传媒','+5.21%','up'],['002739','万达电影','+3.84%','up'],['601595','上海电影','+1.02%','up']]
+    },
+    '002384': {
+      name: '东山精密', state: '启动确认', code: '002384',
+      entry: '板块 A 档 + 评分 86 + 放量突破前高',
+      invalid: ['3 日内收盘低于突破日收盘', '跌破 MA10（现 84.37 / MA10 86.10）'],
+      spark: '2,20 8,23 14,19 20,26 26,30 32,27 38,33 44,38 50,35 56,42 62,48 68,45 74,52 80,58 86,54 92,61 98,66 104,62 110,58 116,64 122,70 128,66',
+      peers: [['002241','歌尔股份','+2.11%','up'],['300207','欣旺达','+1.44%','up'],['002475','立讯精密','−0.32%','dn']]
+    },
+    '600176': {
+      name: '中国巨石', state: '待观察', code: '600176',
+      entry: '板块 D 档（降级入池）+ 个股形态达标',
+      invalid: ['放量跌破 MA20（现 27.37 / MA20 28.05）', '10 日未启动则移出', '板块持续 D 档'],
+      spark: '2,60 8,58 14,62 20,57 26,55 32,58 38,52 44,49 50,52 56,46 62,43 68,47 74,44 80,40 86,43 92,38 98,36 104,39 110,35 116,32 122,30 128,28',
+      peers: [['600176','中国巨石','−4.19%','dn'],['601636','旗滨集团','−3.20%','dn'],['600585','海螺水泥','−1.05%','dn']]
+    },
+    '300308': {
+      name: '中际旭创', state: '持有', code: '300308',
+      entry: '板块 A 档 + 评分 91 + 三把锁低吸触发',
+      invalid: ['跌破 MA10（现 142.60 / MA10 138.40）', '出现 E 类卖出条件'],
+      spark: '2,70 8,68 14,72 20,69 26,74 32,78 38,75 44,80 50,84 56,81 62,86 68,90 74,88 80,92 86,95 92,93 98,97 104,94 110,98 116,96 122,99 128,97',
+      peers: [['300502','新易盛','+3.22%','up'],['002281','光迅科技','+1.85%','up'],['300394','天孚通信','+0.94%','up']]
+    },
+    '300251': {
+      name: '光线传媒', state: '待观察', code: '300251',
+      entry: '板块 A 档 + 评分 78 + 站上 MA20',
+      invalid: ['跌破 MA20（现 12.84 / MA20 12.60）', '10 日内未启动则移出'],
+      spark: '2,40 8,42 14,39 20,44 26,41 32,45 38,43 44,47 50,45 56,49 62,52 68,50 74,54 80,57 86,55 92,59 98,62 104,60 110,64 116,67 122,65 128,68',
+      peers: [['002739','万达电影','+3.84%','up'],['601595','上海电影','+1.02%','up'],['300133','华策影视','+2.97%','up']]
+    },
+    '002739': {
+      name: '万达电影', state: '埋伏', code: '002739',
+      entry: '板块 B 档 + 评分 72 + 缩量回踩 MA20',
+      invalid: ['放量跌破 MA20（现 11.24 / MA20 11.05）', '15 日内未启动则移出'],
+      spark: '2,30 8,32 14,29 20,34 26,31 32,36 38,33 44,38 50,35 56,40 62,37 68,42 74,39 80,44 86,41 92,46 98,43 104,48 110,45 116,50 122,47 128,52',
+      peers: [['300251','光线传媒','+5.21%','up'],['601595','上海电影','+1.02%','up'],['300133','华策影视','+2.97%','up']]
+    }
+  };
+
+  var dt = document.getElementById('detail');
+  var dtTitle = document.getElementById('dt-title');
+  var dtBody = document.getElementById('dt-body');
+  var lastFocus = null;
+
+  function sparkSVG(points){
+    var pts = points.split(' ');
+    var xs = pts.map(function(p){ return +p.split(',')[0]; });
+    var ys = pts.map(function(p){ return +p.split(',')[1]; });
+    var w = 130, h = 72;
+    var xmax = Math.max.apply(null, xs), ymin = Math.min.apply(null, ys), ymax = Math.max.apply(null, ys);
+    var scale = function(x){ return 2 + (x / xmax) * (w - 4); };
+    var scaleY = function(y){ return 4 + ((y - ymin) / Math.max(1, ymax - ymin)) * (h - 12); };
+    var d = pts.map(function(p, i){
+      var x = +p.split(',')[0], y = +p.split(',')[1];
+      return (i ? 'L' : 'M') + scale(x).toFixed(1) + ' ' + scaleY(y).toFixed(1);
+    }).join(' ');
+    var area = d + ' L' + scale(xmax).toFixed(1) + ' ' + (h - 4) + ' L' + scale(0).toFixed(1) + ' ' + (h - 4) + ' Z';
+    return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" role="img" ' +
+           'aria-label="入池以来收盘价走势，整体上行"><path d="' + area + '" fill="rgba(246,70,93,.10)"/>' +
+           '<path d="' + d + '" fill="none" stroke="#F6465D" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  }
+
+  document.querySelectorAll('[data-detail]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var key = btn.dataset.detail;
+      var d = DETAIL[key];
+      if (!d) return;
+      lastFocus = btn;
+      dtTitle.textContent = d.name + ' · ' + d.code;
+      dtBody.innerHTML = `
+        <div>
+          <div style="display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-3)">
+            <span class="st st-${d.state==='埋伏'?'ambush':d.state==='启动确认'?'confirmed':d.state==='持有'?'holding':'watching'}">${d.state}</span>
+            <span style="font-size:var(--fs-xs);color:var(--tx3)">入池理由：${d.entry}</span>
+          </div>
+
+          <h3 class="sect-h">入池以来走势</h3>
+          <div class="spark-wrap">${sparkSVG(d.spark)}</div>
+        </div>
+
+        <div>
+          <h3 class="sect-h">状态时间轴</h3>
+          <div class="timeline">
+            <div class="tl-item">
+              <span class="tl-dot" aria-hidden="true">1</span>
+              <div class="tl-body">
+                <div class="t">入池 · 待观察</div>
+                <div class="d">11-10</div>
+                <div class="e"><span>板块 B 档</span><span>评分 72</span></div>
+              </div>
+            </div>
+            <div class="tl-item">
+              <span class="tl-dot on" aria-hidden="true">2</span>
+              <div class="tl-body">
+                <div class="t">待观察 → 埋伏</div>
+                <div class="d">11-12</div>
+                <div class="e"><span>量比 0.62</span><span>距 MA20 +1.2%</span></div>
+              </div>
+            </div>
+            <div class="tl-item">
+              <span class="tl-dot" aria-hidden="true">3</span>
+              <div class="tl-body">
+                <div class="t">埋伏 → 启动确认</div>
+                <div class="d" style="color:var(--tx-disabled)">待触发：放量突破前高</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="invalid">
+          <h3 class="sect-h">当前失效条件</h3>
+          <ul>${d.invalid.map(function(x){ return '<li>' + x + '</li>'; }).join('')}</ul>
+        </div>
+
+        <div>
+          <h3 class="sect-h">同板块其他标的</h3>
+          <table class="tbl">
+            <thead><tr><th>代码</th><th>名称</th><th class="r">涨跌</th></tr></thead>
+            <tbody>
+              ${d.peers.map(function(p){
+                return '<tr><td class="muted">' + p[0] + '</td><td class="strong">' + p[1] +
+                       '</td><td class="r ' + p[3] + '">' + p[2] + '</td></tr>';
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+      dt.showModal();
+      dtBody.scrollTop = 0;
+      var c = dt.querySelector('[data-close]'); if (c) c.focus();
+    });
+  });
+
+  dt.querySelector('[data-close]').addEventListener('click', function(){ dt.close(); });
+  dt.addEventListener('close', function(){
+    dtBody.innerHTML = '';
+    if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
+    lastFocus = null;
+  });
+
+  /* ---------- 移出对话框 ---------- */
+  var rm = document.getElementById('rm');
+  var rmTarget = document.getElementById('rm-target');
+  var rmErr = document.getElementById('rm-err');
+  var rmOk = document.getElementById('rm-ok');
+  var rmNote = document.getElementById('rm-note');
+  var pendingRow = null;
+
+  document.querySelectorAll('[data-remove]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      lastFocus = btn;
+      pendingRow = btn.closest('.row');
+      rmTarget.textContent = btn.dataset.remove;
+      rmErr.classList.remove('on');
+      rmNote.value = '';
+      rm.querySelectorAll('input[name="reason"]').forEach(function(r){ r.checked = false; });
+      // 系统已自动判定的原因预选（前两项），人工可改
+      var auto = btn.dataset.auto;
+      if (auto) {
+        var hit = rm.querySelector('input[value="' + auto + '"]');
+        if (hit) hit.checked = true;
+      }
+      rm.showModal();
+      var first = rm.querySelector('input[name="reason"]:checked') || rm.querySelector('input[name="reason"]');
+      if (first) first.focus();
+    });
+  });
+
+  rm.addEventListener('close', function(){
+    if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
+    else { var l = document.querySelector('.list'); l.tabIndex = -1; l.focus(); }
+    lastFocus = null; pendingRow = null;
+  });
+
+  rmOk.addEventListener('click', function(){
+    var picked = rm.querySelector('input[name="reason"]:checked');
+    if (!picked) {
+      rmErr.classList.add('on');
+      rm.querySelector('input[name="reason"]').focus();
+      return;
+    }
+    var label = picked.closest('.opt').querySelector('.t').textContent;
+    if (pendingRow) pendingRow.remove();
+    rm.close();
+    announce('已移出，原因：' + label);
+  });
+
+  function announce(msg){
+    var r = document.createElement('div');
+    r.setAttribute('role', 'status');
+    r.className = 'sr-only';
+    r.textContent = msg;
+    document.body.appendChild(r);
+    setTimeout(function(){ r.remove(); }, 1600);
+  }
+})();
+</script>
+</body>
+</html>

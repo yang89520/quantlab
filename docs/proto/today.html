@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今日一页 · 高保真原型 · QuantLab</title>
+<link rel="stylesheet" href="proto.css">
+</head>
+<body>
+
+<a class="skip" href="#main">跳到主内容</a>
+
+<header>
+  <div class="hd">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">QL</div>
+      <b>QuantLab</b>
+    </div>
+    <nav aria-label="主导航">
+      <a href="today.html" aria-current="page">今日一页</a>
+      <a href="watch.html">观察池</a>
+      <a href="lab.html">策略实验室</a>
+      <a href="analysis.html" class="tool">分析台</a>
+      <a href="screener.html" class="tool">选股器</a>
+    </nav>
+    <div class="hd-status">
+      <span class="tag ok"><span class="dot" aria-hidden="true"></span>数据完整</span>
+      <span class="tag">2026-11-13 周五 · 16:35 更新</span>
+    </div>
+  </div>
+</header>
+
+<div class="note">
+  <div role="note">设计原型 · 示意数据。底部控制条可切换三种数据状态；每格的「展开」按钮均可下钻查看明细。</div>
+</div>
+
+<main id="main">
+  <h1 class="sr-only">今日一页 · 七格决策总览</h1>
+
+  <div class="cells">
+
+    <!-- ① 环境 -->
+    <section class="cell cell--env" aria-labelledby="h-env">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">①</span>
+        <h2 id="h-env">环境</h2>
+        <span class="chip chip-attack">进攻</span>
+      </div>
+      <p class="banner" role="status">依据不完整：缺少板块资金流（东财间歇不可用），主线判断仅供参考</p>
+
+      <div class="real-body">
+        <p class="verdict">
+          可顺势，回踩不破可加仓
+          <span class="sub">建议仓位 50%–75% · 综合 62 分</span>
+        </p>
+
+        <div class="breakdown">
+          <div class="bd-bar" role="img" aria-label="评分拆解：趋势 40 分，宽度 18 分，量能 4 分，合计 62 分">
+            <i style="width:64.5%;background:var(--up)"></i>
+            <i style="width:29%;background:var(--blue)"></i>
+            <i style="width:6.5%;background:var(--gold)"></i>
+          </div>
+          <div class="bd-legend">
+            <span><i style="background:var(--up)" aria-hidden="true"></i>趋势 40</span>
+            <span><i style="background:var(--blue)" aria-hidden="true"></i>宽度 18</span>
+            <span><i style="background:var(--gold)" aria-hidden="true"></i>量能 4</span>
+          </div>
+        </div>
+
+        <div class="evid">
+          <h3 class="sect-h">依据</h3>
+          <ul>
+            <li><span class="k">指数站上 MA20</span><span class="v num">3421.5 &gt; 3380.2</span><span class="mark ok" aria-label="达标">✓</span></li>
+            <li><span class="k">市场宽度</span><span class="v num">58%</span><span class="mark ok" aria-label="达标">✓</span></li>
+            <li><span class="k">量能（5日/20日）</span><span class="v num">1.12×</span><span class="mark no" aria-label="偏弱">·</span></li>
+          </ul>
+        </div>
+
+        <div class="invalid">
+          <h3 class="sect-h">失效条件</h3>
+          <ul>
+            <li>指数跌破 MA20（现 <b>3421.5</b> / MA20 <b>3380.2</b>）</li>
+            <li>宽度低于 40%（现 <b>58%</b>）</li>
+            <li>量能萎缩至 0.7 倍以下（现 <b>1.12×</b>）</li>
+          </ul>
+        </div>
+
+        <p class="delta">
+          <span>昨日</span><span class="was">观望</span>
+          <span class="arr" aria-hidden="true">→</span><span class="now">进攻</span>
+          <button class="lnk" type="button" data-drawer="env">为什么变了</button>
+        </p>
+      </div>
+
+      <div class="nodata-body">需一期数据（环境判定）</div>
+    </section>
+
+    <!-- ⑥ 对账 -->
+    <section class="cell cell--recon" aria-labelledby="h-recon">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">⑥</span>
+        <h2 id="h-recon">对账</h2>
+        <span class="chip chip-fact">已发生</span>
+      </div>
+      <p class="banner" role="status">依据不完整：昨日预判卡缺失，无法对账</p>
+
+      <div class="real-body">
+        <p class="verdict">
+          昨日判「进攻」，实际跌 0.62% —— <span class="fail">环境判错</span>
+          <span class="sub">归因：环境（优先级高于方向与选股）</span>
+        </p>
+
+        <table class="cmp">
+          <caption class="sr-only">昨日预判与今日实际对照</caption>
+          <tbody>
+            <tr><th scope="row">昨日预判</th><td>进攻</td></tr>
+            <tr><th scope="row">今日实际涨跌</th><td class="bad num">−0.62%</td></tr>
+            <tr><th scope="row">命中失效条件</th><td class="bad">E2 宽度 &lt; 40%（实际 34%）</td></tr>
+            <tr><th scope="row">当日判断得分</th><td class="bad num">13 / 100</td></tr>
+          </tbody>
+        </table>
+
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:var(--sp-2)"
+             aria-label="最近五日命中序列">
+          <span class="st st-holding" aria-label="命中">✓</span>
+          <span class="st st-watching" aria-label="未命中" style="color:var(--up2);border-color:rgba(246,70,93,.3);background:rgba(246,70,93,.12)">✗</span>
+          <span class="st st-holding" aria-label="命中">✓</span>
+          <span class="st st-holding" aria-label="命中">✓</span>
+          <span class="st st-watching" aria-label="未命中" style="color:var(--up2);border-color:rgba(246,70,93,.3);background:rgba(246,70,93,.12)">✗</span>
+          <em style="font-style:normal;font-size:var(--fs-xs);color:var(--tx3);margin-left:var(--sp-1)">近 5 日 3 中</em>
+        </div>
+
+        <p class="delta">
+          <span>累计</span><span class="now">20 日命中率 55%</span>
+          <button class="lnk" type="button" data-drawer="recon">看归因明细</button>
+        </p>
+      </div>
+
+      <div class="nodata-body">需一期数据（对账结果）</div>
+    </section>
+
+    <!-- ② 主线 -->
+    <section class="cell cell--mainline" aria-labelledby="h-main">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">②</span>
+        <h2 id="h-main">主线</h2>
+        <span class="chip chip-a">2 个 A 档</span>
+      </div>
+      <p class="banner" role="status">依据不完整：资金因子降级（东财 f62 不可用）</p>
+
+      <div class="real-body">
+        <p class="verdict">
+          传媒娱乐、华为汽车领涨
+          <span class="sub">行业 49 个 / 概念 172 个，按四因子排序</span>
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:var(--sp-2)">
+          <div style="display:flex;align-items:center;gap:var(--sp-2);padding:8px 10px;border-radius:var(--r-sm);background:var(--card2);border:1px solid var(--line);min-width:0">
+            <span class="chip chip-a" style="margin-left:0">A</span>
+            <span style="flex:1 1 auto;min-width:0;font-size:var(--fs-sm);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">传媒娱乐</span>
+            <span class="num" style="font-size:var(--fs-sm);font-weight:600;color:var(--up2)">+2.81%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-2);padding:8px 10px;border-radius:var(--r-sm);background:var(--card2);border:1px solid var(--line);min-width:0">
+            <span class="chip chip-a" style="margin-left:0">A</span>
+            <span style="flex:1 1 auto;min-width:0;font-size:var(--fs-sm);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">华为汽车</span>
+            <span class="num" style="font-size:var(--fs-sm);font-weight:600;color:var(--up2)">+2.14%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-2);padding:8px 10px;border-radius:var(--r-sm);background:var(--card2);border:1px solid var(--line);min-width:0">
+            <span class="chip chip-b" style="margin-left:0">B</span>
+            <span style="flex:1 1 auto;min-width:0;font-size:var(--fs-sm);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">船舶制造</span>
+            <span class="num" style="font-size:var(--fs-sm);font-weight:600;color:var(--up2)">+1.63%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--sp-2);padding:8px 10px;border-radius:var(--r-sm);background:var(--card2);border:1px solid var(--line);min-width:0">
+            <span class="chip chip-d" style="margin-left:0">D</span>
+            <span style="flex:1 1 auto;min-width:0;font-size:var(--fs-sm);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">玻璃行业</span>
+            <span class="num" style="font-size:var(--fs-sm);font-weight:600;color:var(--dn2)">−4.19%</span>
+          </div>
+        </div>
+
+        <div class="invalid">
+          <h3 class="sect-h">失效条件</h3>
+          <ul>
+            <li>A 档板块次日跌出前 30%（现均在前 10%）</li>
+            <li>A 档板块 3 日净流出居前</li>
+          </ul>
+        </div>
+
+        <p class="delta">
+          <span>昨日</span><span class="was">1 个 A 档</span>
+          <span class="arr" aria-hidden="true">→</span><span class="now">2 个</span>
+          <button class="lnk" type="button" data-drawer="sector">看板块详情</button>
+        </p>
+      </div>
+
+      <div class="nodata-body">需二期数据（板块强度）</div>
+    </section>
+
+    <!-- ③ 时机 -->
+    <section class="cell cell--timing" aria-labelledby="h-timing">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">③</span>
+        <h2 id="h-timing">时机</h2>
+        <span class="chip chip-b">12 只触发</span>
+      </div>
+      <p class="banner" role="status">依据不完整：策略信号只覆盖 3 个已上线策略</p>
+
+      <div class="real-body">
+        <p class="verdict">
+          今日 12 只触发买入信号
+          <span class="sub">仅统计已上线策略，未覆盖全市场</span>
+        </p>
+
+        <div class="evid">
+          <h3 class="sect-h">代表标的</h3>
+          <ul>
+            <li><span class="k">均线突破 · 沪电股份</span><span class="v num">+2.4%</span><span class="mark ok" aria-label="命中">✓</span></li>
+            <li><span class="k">三把锁低吸 · 中际旭创</span><span class="v num">+1.8%</span><span class="mark ok" aria-label="命中">✓</span></li>
+            <li><span class="k">涨停回踩 · 沪光股份</span><span class="v num">−0.6%</span><span class="mark no" aria-label="未命中">·</span></li>
+          </ul>
+        </div>
+
+        <div class="invalid">
+          <h3 class="sect-h">失效条件</h3>
+          <ul>
+            <li>信号标的次日多数低开 &gt; 2%</li>
+            <li>触发数骤降至 3 只以下</li>
+          </ul>
+        </div>
+
+        <p class="delta">
+          <span>昨日</span><span class="was">8 只</span>
+          <span class="arr" aria-hidden="true">→</span><span class="now">12 只</span>
+          <button class="lnk" type="button" data-drawer="timing">看信号明细</button>
+        </p>
+      </div>
+
+      <div class="nodata-body">需三期功能（策略实验室）</div>
+    </section>
+
+    <!-- ④ 候选 -->
+    <section class="cell cell--watch" aria-labelledby="h-watch">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">④</span>
+        <h2 id="h-watch">候选</h2>
+        <span class="chip chip-b">埋伏 5</span>
+      </div>
+      <p class="banner" role="status">依据不完整：板块档位缺失，入池条件降级为个股形态</p>
+
+      <div class="real-body">
+        <p class="verdict">
+          新增 2 · 晋级 1 · 淘汰 1
+          <span class="sub">池内 5 只待观察 / 3 只埋伏 / 1 只启动确认</span>
+        </p>
+
+        <div class="evid">
+          <h3 class="sect-h">今日变化</h3>
+          <ul>
+            <li><span class="k">浙文互联 · 待观察 → 埋伏</span><span class="v">缩量回踩</span></li>
+            <li><span class="k">东山精密 · 埋伏 → 启动确认</span><span class="v">放量破前高</span></li>
+            <li><span class="k">中国巨石 · 移出</span><span class="v">逻辑破</span></li>
+          </ul>
+        </div>
+
+        <div class="invalid">
+          <h3 class="sect-h">失效条件</h3>
+          <ul>
+            <li>3 日内未启动则降级</li>
+            <li>放量跌破 MA20</li>
+          </ul>
+        </div>
+
+        <p class="delta">
+          <span>昨日</span><span class="was">新增 0</span>
+          <span class="arr" aria-hidden="true">→</span><span class="now">新增 2</span>
+          <a class="lnk" href="watch.html" style="text-decoration:none">去观察池</a>
+        </p>
+      </div>
+
+      <div class="nodata-body">需二期数据（观察池）</div>
+    </section>
+
+    <!-- ⑤ 风险 -->
+    <section class="cell cell--risk" aria-labelledby="h-risk">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">⑤</span>
+        <h2 id="h-risk">风险</h2>
+        <span class="chip chip-fact">已发生</span>
+      </div>
+      <p class="banner" role="status">依据不完整：持仓数据未同步</p>
+
+      <div class="real-body">
+        <p class="verdict">
+          持仓 5 只，2 只触发风险信号
+          <span class="sub">该格只报事实、不做预判，因此不设失效条件</span>
+        </p>
+
+        <div class="evid">
+          <h3 class="sect-h">触发明细</h3>
+          <ul>
+            <li><span class="k">浙文互联 · 跌破 MA20</span><span class="v num">7.46</span><span class="mark no" aria-label="风险">!</span></li>
+            <li><span class="k">东山精密 · 单日 −9.95%</span><span class="v num">84.37</span><span class="mark no" aria-label="风险">!</span></li>
+          </ul>
+        </div>
+
+        <p class="delta">
+          <span>昨日</span><span class="was">1 只</span>
+          <span class="arr" aria-hidden="true">→</span><span class="now">2 只</span>
+          <button class="lnk" type="button" data-drawer="risk">看持仓风控</button>
+        </p>
+      </div>
+
+      <div class="nodata-body">需一期数据（持仓风控）</div>
+    </section>
+
+    <!-- ⑦ 明日三情景 -->
+    <section class="cell cell--plan" aria-labelledby="h-plan">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">⑦</span>
+        <h2 id="h-plan">明日</h2>
+        <span class="chip chip-wait">中性偏多</span>
+      </div>
+      <p class="banner" role="status">依据不完整：板块资金流缺失</p>
+
+      <div class="real-body">
+        <p class="verdict">
+          三种情景，互斥且穷尽
+          <span class="sub">触发条件均可计算，收盘后自动归入其一</span>
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:var(--sp-2)">
+          <div style="display:flex;gap:var(--sp-2);padding:10px 12px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card2);min-width:0">
+            <span style="flex:0 0 3px;border-radius:2px;background:var(--up)" aria-hidden="true"></span>
+            <div style="min-width:0;flex:1 1 auto">
+              <div style="font-size:var(--fs-sm);font-weight:600;margin-bottom:2px">乐观 <span style="color:var(--tx3);font-weight:400">概率 30%</span></div>
+              <div style="font-size:var(--fs-xs);color:var(--tx3);line-height:1.5">指数涨 &gt; 0.8% 且 宽度 &gt; 55%</div>
+              <div style="font-size:var(--fs-xs);color:var(--tx2);margin-top:3px">顺势持有，不追高</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:var(--sp-2);padding:10px 12px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card2);min-width:0">
+            <span style="flex:0 0 3px;border-radius:2px;background:var(--tx3)" aria-hidden="true"></span>
+            <div style="min-width:0;flex:1 1 auto">
+              <div style="font-size:var(--fs-sm);font-weight:600;margin-bottom:2px">中性 <span style="color:var(--tx3);font-weight:400">概率 45%</span></div>
+              <div style="font-size:var(--fs-xs);color:var(--tx3);line-height:1.5">指数振幅 &lt; 0.8%</div>
+              <div style="font-size:var(--fs-xs);color:var(--tx2);margin-top:3px">观察为主，不加仓</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:var(--sp-2);padding:10px 12px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--card2);min-width:0">
+            <span style="flex:0 0 3px;border-radius:2px;background:var(--dn)" aria-hidden="true"></span>
+            <div style="min-width:0;flex:1 1 auto">
+              <div style="font-size:var(--fs-sm);font-weight:600;margin-bottom:2px">悲观 <span style="color:var(--tx3);font-weight:400">概率 25%</span></div>
+              <div style="font-size:var(--fs-xs);color:var(--tx3);line-height:1.5">指数跌 &gt; 0.8% 或 宽度 &lt; 40%</div>
+              <div style="font-size:var(--fs-xs);color:var(--tx2);margin-top:3px">降仓，不接反弹</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="invalid">
+          <h3 class="sect-h">失效条件</h3>
+          <ul>
+            <li>三情景全未命中 → 说明对明日的想象完全不靠谱</li>
+            <li>任一情景的触发条件被反向击穿</li>
+          </ul>
+        </div>
+
+        <p class="delta">
+          <span>昨日</span><span class="was">落在「中性」</span>
+          <span class="arr" aria-hidden="true">→</span><span class="now">今日重设</span>
+          <button class="lnk" type="button" data-drawer="plan">看昨日详情</button>
+        </p>
+      </div>
+
+      <div class="nodata-body">需一期数据（预判卡）</div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="disclaim">
+    <h4>免责声明</h4>
+    <p>本页面所有判断、评分、信号均为技术分析结果，不构成投资建议。数据来源为公开接口，可能存在延迟或缺失，请以行情软件为准。股市有风险，投资需谨慎。</p>
+  </div>
+</footer>
+
+<!-- 统一抽屉：内容由 JS 按 data-drawer 填充 -->
+<dialog class="drawer" id="drawer" aria-labelledby="dr-title">
+  <div class="dlg-hd">
+    <h2 id="dr-title">明细</h2>
+    <button class="x" type="button" data-close aria-label="关闭">×</button>
+  </div>
+  <div class="dr-bd" id="dr-body"></div>
+</dialog>
+
+<div class="protobar" role="region" aria-label="原型状态切换">
+  <div class="inner">
+    <strong>原型控制</strong>
+    <div class="opts" role="radiogroup" aria-label="切换数据状态">
+      <label><input type="radio" name="state" value="normal" checked><span>数据完整</span></label>
+      <label><input type="radio" name="state" value="incomplete"><span>数据不完整</span></label>
+      <label><input type="radio" name="state" value="nodata"><span>三期未上线</span></label>
+    </div>
+    <span>切到「三期未上线」看 ③ 时机格如何在不显示 0 的前提下表达"暂无能力"</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  /* ---------- 状态切换 ---------- */
+  var cells = document.querySelectorAll('.cell');
+  document.querySelectorAll('input[name="state"]').forEach(function(r){
+    r.addEventListener('change', function(){
+      var v = this.value;
+      cells.forEach(function(c){
+        c.classList.remove('incomplete','nodata');
+        if (v === 'incomplete') c.classList.add('incomplete');
+        if (v === 'nodata') c.classList.add('nodata');
+      });
+    });
+  });
+
+  /* ---------- 抽屉内容 ---------- */
+  var DRAWERS = {
+    env: {
+      title: '环境判断 · 为什么从「观望」变成「进攻」',
+      html: `
+        <table class="cmp">
+          <caption class="sr-only">昨日与今日的分项对比</caption>
+          <tbody>
+            <tr><th scope="row">指数 vs MA20</th><td>3312.4 &lt; 3380.2　→　3421.5 &gt; 3380.2</td></tr>
+            <tr><th scope="row">市场宽度</th><td>41%　→　58%</td></tr>
+            <tr><th scope="row">量能（5/20日）</th><td>0.94×　→　1.12×</td></tr>
+            <tr><th scope="row">综合得分</th><td class="good">44（观望）　→　62（进攻）</td></tr>
+          </tbody>
+        </table>
+        <div>
+          <h3 class="sect-h">变化主因</h3>
+          <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;font-size:var(--fs-sm);color:var(--tx2)">
+            <li>· 指数重新站上 MA20，趋势分项由 20 → 40（+20）</li>
+            <li>· 宽度由 41% 升至 58%，宽度分项由 4.5 → 17.2（+12.7）</li>
+            <li>· 量能虽仍偏弱，但已从 0.94 回到 1.12，勉强达标</li>
+          </ul>
+        </div>
+        <div class="invalid">
+          <h3 class="sect-h">提醒</h3>
+          <ul><li>本次升级主要由「趋势 + 宽度」驱动，量能分项只有 4 分，属于"弱确认"的进攻态</li></ul>
+        </div>`
+    },
+    recon: {
+      title: '对账明细 · 四段归因',
+      html: `
+        <p class="dlg-sub">判断出错时，必须定位到<b>具体哪一环</b>——顺序固定为 环境 &gt; 方向 &gt; 标的 &gt; 时机，命中即停。</p>
+        <div class="gates">
+          <div class="gate fail">
+            <span class="ico" aria-hidden="true">✗</span>
+            <div class="body">
+              <div class="t">① 环境</div>
+              <div class="d">判「进攻」，实际 −0.62%，且宽度跌到 34%（低于 40% 阈值）</div>
+              <div class="figs"><span>命中失效条件 <b>E2</b></span><span>得分 <b>0 / 100</b></span></div>
+            </div>
+          </div>
+          <div class="gate na">
+            <span class="ico" aria-hidden="true">—</span>
+            <div class="body">
+              <div class="t">② 方向</div>
+              <div class="d">环境已判错，按优先级不再往下归因</div>
+            </div>
+          </div>
+          <div class="gate na">
+            <span class="ico" aria-hidden="true">—</span>
+            <div class="body">
+              <div class="t">③ 标的</div>
+              <div class="d">同上，不参与本次归因</div>
+            </div>
+          </div>
+          <div class="gate na">
+            <span class="ico" aria-hidden="true">—</span>
+            <div class="body">
+              <div class="t">④ 时机</div>
+              <div class="d">同上，不参与本次归因</div>
+            </div>
+          </div>
+        </div>
+        <div class="invalid">
+          <h3 class="sect-h">该改什么</h3>
+          <ul><li>归因为「环境」→ 应先审视环境判定阈值，而不是去优化选股</li></ul>
+        </div>
+        <div>
+          <h3 class="sect-h">近 20 日错因分布</h3>
+          <table class="cmp">
+            <tbody>
+              <tr><th scope="row">环境错</th><td class="bad num">5 次</td></tr>
+              <tr><th scope="row">方向错</th><td class="num">2 次</td></tr>
+              <tr><th scope="row">标的错</th><td class="num">1 次</td></tr>
+              <tr><th scope="row">时机错</th><td class="num">1 次</td></tr>
+            </tbody>
+          </table>
+        </div>`
+    },
+    sector: {
+      title: '板块详情 · 传媒娱乐（A 主攻）',
+      html: `
+        <table class="cmp">
+          <caption class="sr-only">四因子拆解</caption>
+          <tbody>
+            <tr><th scope="row">动量 35%</th><td class="good num">92.4 分（前 8%）</td></tr>
+            <tr><th scope="row">资金 25%</th><td class="num">71.0 分<span style="color:var(--tx3)">（降级口径）</span></td></tr>
+            <tr><th scope="row">宽度 20%</th><td class="good num">83.0 分</td></tr>
+            <tr><th scope="row">持续性 20%</th><td class="good num">85.0 分</td></tr>
+            <tr><th scope="row">合计</th><td class="good num">84.2 分</td></tr>
+          </tbody>
+        </table>
+        <div class="invalid">
+          <h3 class="sect-h">口径说明</h3>
+          <ul>
+            <li>资金因子为降级口径（成交额分位 70% + 量比 30%），东财净流入不可用</li>
+            <li>板块 K 线为本地聚合（成分股等权），与行情软件数值不一致属正常</li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="sect-h">板块内前排（按综合评分）</h3>
+          <table class="tbl">
+            <thead><tr><th>代码</th><th>名称</th><th class="r">涨跌</th><th class="r">评分</th></tr></thead>
+            <tbody>
+              <tr><td class="muted">300251</td><td class="strong">光线传媒</td><td class="r up">+5.21%</td><td class="r strong">88</td></tr>
+              <tr><td class="muted">002739</td><td class="strong">万达电影</td><td class="r up">+3.84%</td><td class="r strong">81</td></tr>
+              <tr><td class="muted">300133</td><td class="strong">华策影视</td><td class="r up">+2.97%</td><td class="r strong">77</td></tr>
+            </tbody>
+          </table>
+        </div>`
+    },
+    timing: {
+      title: '信号明细 · 今日 12 只',
+      html: `
+        <p class="dlg-sub">只统计已上线策略（3 个），未覆盖全市场——这是"依据不完整"标记的来源。</p>
+        <table class="tbl">
+          <thead><tr><th>标的</th><th>策略</th><th class="r">信号价</th><th class="r">T+1</th></tr></thead>
+          <tbody>
+            <tr><td class="strong">沪电股份</td><td class="muted">均线突破</td><td class="r">38.42</td><td class="r up">+2.4%</td></tr>
+            <tr><td class="strong">中际旭创</td><td class="muted">三把锁低吸</td><td class="r">142.60</td><td class="r up">+1.8%</td></tr>
+            <tr><td class="strong">沪光股份</td><td class="muted">涨停回踩</td><td class="r">26.15</td><td class="r dn">−0.6%</td></tr>
+            <tr><td class="strong">德赛西威</td><td class="muted">均线突破</td><td class="r">118.30</td><td class="r up">+1.1%</td></tr>
+            <tr><td class="strong">拓普集团</td><td class="muted">三把锁低吸</td><td class="r">52.80</td><td class="r muted">待回填</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:var(--fs-xs);color:var(--tx3)">共 12 只，此处展示前 5。T+1 为信号后首个交易日涨跌。</p>`
+    },
+    risk: {
+      title: '持仓风控 · 5 只',
+      html: `
+        <table class="tbl">
+          <thead><tr><th>标的</th><th>状态</th><th class="r">现价</th><th class="r">成本</th><th class="r">盈亏</th></tr></thead>
+          <tbody>
+            <tr><td class="strong">浙文互联</td><td><span class="st st-watching">破位</span></td><td class="r">7.46</td><td class="r muted">7.92</td><td class="r dn">−5.8%</td></tr>
+            <tr><td class="strong">东山精密</td><td><span class="st st-suspect">转弱</span></td><td class="r">84.37</td><td class="r muted">79.10</td><td class="r up">+6.7%</td></tr>
+            <tr><td class="strong">中际旭创</td><td><span class="st st-holding">强势</span></td><td class="r">142.60</td><td class="r muted">131.20</td><td class="r up">+8.7%</td></tr>
+            <tr><td class="strong">沪电股份</td><td><span class="st st-holding">强势</span></td><td class="r">38.42</td><td class="r muted">36.05</td><td class="r up">+6.6%</td></tr>
+            <tr><td class="strong">中国巨石</td><td><span class="st st-watching">震荡</span></td><td class="r">27.37</td><td class="r muted">27.80</td><td class="r dn">−1.5%</td></tr>
+          </tbody>
+        </table>
+        <div class="invalid">
+          <h3 class="sect-h">触发规则</h3>
+          <ul>
+            <li>浙文互联：收盘跌破 MA20，且成交额放大 1.4 倍 → 减仓信号</li>
+            <li>东山精密：单日 −9.95%，跌破 10 日线 → 观察，不补仓</li>
+          </ul>
+        </div>
+        <p style="font-size:var(--fs-xs);color:var(--tx3)">本格只报已发生的事实，不做预判，因此不设失效条件。</p>`
+    },
+    plan: {
+      title: '昨日三情景 · 实际落在哪一格',
+      html: `
+        <table class="cmp">
+          <caption class="sr-only">昨日情景与今日实际</caption>
+          <tbody>
+            <tr><th scope="row">昨日预判中性概率</th><td>45%</td></tr>
+            <tr><th scope="row">今日实际振幅</th><td class="num">0.71%</td></tr>
+            <tr><th scope="row">归入情景</th><td class="good">中性（振幅 &lt; 0.8%）</td></tr>
+            <tr><th scope="row">中性情景预案</th><td>观察为主，不加仓</td></tr>
+          </tbody>
+        </table>
+        <div>
+          <h3 class="sect-h">三情景是否互斥且穷尽</h3>
+          <ul style="list-style:none;display:flex;flex-direction:column;gap:6px;font-size:var(--fs-sm);color:var(--tx2)">
+            <li>· 乐观：涨 &gt; 0.8% 且 宽度 &gt; 55%</li>
+            <li>· 悲观：跌 &gt; 0.8% 或 宽度 &lt; 40%</li>
+            <li>· 中性：其余（兜底，保证穷尽）</li>
+          </ul>
+        </div>
+        <div class="invalid">
+          <h3 class="sect-h">注意</h3>
+          <ul><li>若某日三情景全未命中，说明情景设定有漏，需回看条件是否覆盖了所有情况</li></ul>
+        </div>`
+    }
+  };
+
+  var drawer = document.getElementById('drawer');
+  var drTitle = document.getElementById('dr-title');
+  var drBody  = document.getElementById('dr-body');
+  var lastFocus = null;
+
+  document.querySelectorAll('[data-drawer]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var key = btn.dataset.drawer;
+      var d = DRAWERS[key];
+      if (!d) return;
+      lastFocus = btn;
+      drTitle.textContent = d.title;
+      drBody.innerHTML = d.html;
+      drawer.showModal();                 // 自带焦点陷阱 + ESC
+      drBody.scrollTop = 0;
+      var closeBtn = drawer.querySelector('[data-close]');
+      if (closeBtn) closeBtn.focus();
+    });
+  });
+
+  drawer.querySelector('[data-close]').addEventListener('click', function(){ drawer.close(); });
+
+  drawer.addEventListener('close', function(){
+    drBody.innerHTML = '';                // 清空，避免下次闪现旧内容
+    if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
+    lastFocus = null;
+  });
+})();
+</script>
+</body>
+</html>

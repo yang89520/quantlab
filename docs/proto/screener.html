@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>选股器 · 高保真原型 · QuantLab</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+/* ============ 选股器页面级 ============ */
+.screen{max-width:1400px;margin:0 auto;padding:var(--sp-4) var(--sp-4) var(--sp-8);
+  display:grid;gap:var(--sp-4);grid-template-columns:1fr}
+@media (min-width:1000px){
+  .screen{grid-template-columns:296px minmax(0,1fr);align-items:start}
+}
+
+/* 筛选面板 */
+.panel{
+  background:linear-gradient(180deg,var(--card),var(--bg2));
+  border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+}
+@media (min-width:1000px){
+  .panel{position:sticky;top:80px;max-height:calc(100vh - 96px);overflow-y:auto}
+}
+.pnl-hd{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-4);
+  border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:2}
+.pnl-hd h2{font-size:var(--fs-h3);font-weight:600;color:var(--tx2);flex:1 1 auto}
+.lnk-sm{
+  background:none;border:none;cursor:pointer;font-family:inherit;
+  font-size:var(--fs-xs);color:var(--blue);padding:6px 8px;border-radius:6px;min-height:32px;
+}
+.lnk-sm:hover{background:rgba(107,165,255,.1);text-decoration:underline}
+.grp{padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--line)}
+.grp:last-child{border-bottom:none}
+.grp-t{font-size:var(--fs-xs);color:var(--tx3);letter-spacing:.6px;font-weight:600;margin-bottom:var(--sp-2)}
+.pool-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.pool-grid button{
+  padding:7px 4px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  background:var(--card2);color:var(--tx2);font-family:inherit;font-size:var(--fs-badge);
+  font-weight:600;cursor:pointer;min-height:36px;transition:.16s;white-space:nowrap;
+}
+.pool-grid button:hover{background:var(--card3);color:var(--tx)}
+.pool-grid button[aria-pressed="true"]{background:#1E2A3B;color:#fff;border-color:#33455E}
+.row2g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label{font-size:var(--fs-badge);color:var(--tx3)}
+.fld input,.fld select{
+  padding:7px 9px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  background:var(--card2);color:var(--tx);font-family:inherit;font-size:var(--fs-xs);
+  min-height:34px;width:100%;
+}
+.fld input::placeholder{color:var(--tx-disabled)}
+.chk-row{display:flex;flex-direction:column;gap:6px}
+.chk{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);color:var(--tx2);
+  cursor:pointer;min-height:32px}
+.chk input{accent-color:var(--blue);width:15px;height:15px;flex:0 0 auto}
+.hintline{font-size:var(--fs-badge);color:var(--tx3);line-height:1.5;margin-top:4px}
+
+/* 结果区 */
+.results{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0}
+
+/* 漏斗 */
+.funnel{
+  background:linear-gradient(180deg,var(--card),var(--bg2));
+  border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--sp-3) var(--sp-4);
+}
+.funnel-hd{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-3)}
+.funnel-hd h2{font-size:var(--fs-h3);font-weight:600;color:var(--tx2)}
+.funnel-hd .note-txt{font-size:var(--fs-badge);color:var(--tx3);margin-left:auto}
+.steps{display:flex;align-items:stretch;gap:var(--sp-2);flex-wrap:wrap}
+.step{
+  flex:1 1 120px;min-width:104px;padding:10px 12px;border-radius:var(--r-md);
+  background:var(--card2);border:1px solid var(--line);position:relative;
+}
+.step .l{font-size:var(--fs-badge);color:var(--tx3);margin-bottom:2px}
+.step .n{font-size:var(--fs-h2);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+.step .d{font-size:var(--fs-badge);color:var(--tx3);margin-top:1px}
+.step.last{border-color:rgba(246,70,93,.35);background:rgba(246,70,93,.07)}
+.step.last .n{color:var(--up2)}
+.step .arrow{
+  position:absolute;right:-9px;top:50%;transform:translateY(-50%);
+  color:var(--tx-disabled);font-size:11px;z-index:1;background:var(--bg2);padding:0 2px;
+}
+@media (max-width:863px){ .step .arrow{display:none} }
+
+/* 工具条 */
+.res-toolbar{
+  display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;
+  padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--line);
+  background:var(--card);border-radius:var(--r-lg) var(--r-lg) 0 0;
+}
+.res-toolbar .lbl{font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap}
+.res-toolbar .grow{flex:1 1 auto}
+.progress{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-xs);color:var(--tx3)}
+.progress .bar{width:96px;height:4px;border-radius:2px;background:var(--card2);overflow:hidden}
+.progress .bar i{display:block;height:100%;background:var(--blue);border-radius:2px}
+
+/* 结果表 */
+.res-table-wrap{background:linear-gradient(180deg,var(--card),var(--bg2));
+  border:1px solid var(--line);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden}
+.tags{display:flex;gap:4px;flex-wrap:wrap}
+.tag-mini{
+  font-size:var(--fs-badge);padding:2px 7px;border-radius:6px;
+  background:rgba(154,166,184,.12);color:var(--tx2);white-space:nowrap;
+}
+.tag-mini.hot{background:rgba(246,70,93,.14);color:var(--up2)}
+.tag-mini.vol{background:rgba(232,184,75,.14);color:var(--gold)}
+.tag-mini.new{background:rgba(53,208,208,.14);color:var(--cyan)}
+.score-cell{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;width:100%}
+.score-cell .n{font-weight:700;font-variant-numeric:tabular-nums}
+.empty{padding:var(--sp-8) var(--sp-4);text-align:center}
+.empty .t{font-size:var(--fs-h2);font-weight:600;margin-bottom:var(--sp-2)}
+.empty .d{font-size:var(--fs-sm);color:var(--tx3);line-height:1.7;max-width:420px;margin:0 auto}
+.row-act{display:flex;gap:6px;justify-content:flex-end}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">跳到主内容</a>
+
+<header>
+  <div class="hd">
+    <div class="brand"><div class="logo" aria-hidden="true">QL</div><b>QuantLab</b></div>
+    <nav aria-label="主导航">
+      <a href="today.html">今日一页</a>
+      <a href="watch.html">观察池</a>
+      <a href="lab.html">策略实验室</a>
+      <a href="analysis.html" class="tool">分析台</a>
+      <a href="screener.html" aria-current="page">选股器</a>
+    </nav>
+    <div class="hd-status">
+      <span class="tag ok"><span class="dot" aria-hidden="true"></span>形态已扫 1180/3192</span>
+      <span class="tag">16:52 更新</span>
+    </div>
+  </div>
+</header>
+
+<div class="note">
+  <div role="note">设计原型 · 示意数据。重点看：① 三层漏斗如何把「不截断」变成可见的数字 ② 筛选面板在 1000px 以下的折叠 ③ 形态扫描的进度与「未扫描」状态</div>
+</div>
+
+<main id="main" class="screen">
+  <div class="page-hd" style="grid-column:1 / -1;margin-bottom:0">
+    <h1>选股器</h1>
+    <p>全市场 5342 只 · 形态对池内每一只判定，不截断</p>
+  </div>
+
+  <!-- 筛选面板 -->
+  <aside class="panel" id="panel" aria-labelledby="pnl-title">
+    <div class="pnl-hd">
+      <h2 id="pnl-title">筛选条件</h2>
+      <button class="lnk-sm" type="button" id="btn-reset">重置</button>
+      <button class="lnk-sm" type="button" id="btn-fold" aria-expanded="true" aria-controls="pnl-body">收起</button>
+    </div>
+
+    <div id="pnl-body">
+      <div class="grp">
+        <div class="grp-t">股票池</div>
+        <div class="pool-grid" role="group" aria-label="股票池">
+          <button type="button" aria-pressed="true">主板</button>
+          <button type="button" aria-pressed="false">全部</button>
+          <button type="button" aria-pressed="false">沪市</button>
+          <button type="button" aria-pressed="false">深市</button>
+          <button type="button" aria-pressed="false">创业板</button>
+          <button type="button" aria-pressed="false">科创板</button>
+          <button type="button" aria-pressed="false">北交所</button>
+        </div>
+        <p class="hintline">主板 3192 只（含原中小板 002/003）；全市场 5342 只</p>
+      </div>
+
+      <div class="grp">
+        <div class="grp-t">行情</div>
+        <div class="row2g">
+          <div class="fld"><label for="f-chg">涨跌幅 ≥ (%)</label><input id="f-chg" type="number" value="2" min="-10" step="0.5"></div>
+          <div class="fld"><label for="f-price">现价 ≤ (元)</label><input id="f-price" type="number" placeholder="不限"></div>
+          <div class="fld"><label for="f-amt">成交额 ≥ (亿)</label><input id="f-amt" type="number" value="2"></div>
+          <div class="fld"><label for="f-turn">换手率 ≥ (%)</label><input id="f-turn" type="number" value="3"></div>
+          <div class="fld"><label for="f-fcap">流通市值 ≥ (亿)</label><input id="f-fcap" type="number" value="50"></div>
+          <div class="fld"><label for="f-limit">距涨停 ≤ (%)</label><input id="f-limit" type="number" placeholder="不限"></div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp-t">估值</div>
+        <div class="row2g">
+          <div class="fld"><label for="f-pe">PE 上限</label><input id="f-pe" type="number" value="60"></div>
+          <div class="fld"><label for="f-pb">PB 上限</label><input id="f-pb" type="number" placeholder="不限"></div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp-t">排除</div>
+        <div class="chk-row">
+          <label class="chk"><input type="checkbox" checked><span>排除 ST / *ST</span></label>
+          <label class="chk"><input type="checkbox" checked><span>排除上市不足 60 个交易日</span></label>
+          <label class="chk"><input type="checkbox"><span>排除停牌</span></label>
+        </div>
+      </div>
+
+      <div class="grp">
+        <div class="grp-t">形态（全池判定）</div>
+        <div class="chk-row">
+          <label class="chk"><input type="checkbox" checked><span>均线多头（5&gt;10&gt;20&gt;60）</span></label>
+          <label class="chk"><input type="checkbox" checked><span>站上 20 日线</span></label>
+          <label class="chk"><input type="checkbox"><span>20 日线上行</span></label>
+          <label class="chk"><input type="checkbox"><span>放量（量比 &gt; 1.5）</span></label>
+          <label class="chk"><input type="checkbox"><span>60 日新高</span></label>
+        </div>
+        <div class="row2g" style="margin-top:var(--sp-2)">
+          <div class="fld"><label for="f-g5">5 日涨幅 ≥ (%)</label><input id="f-g5" type="number" placeholder="不限"></div>
+          <div class="fld"><label for="f-pos">年内位置 ≥ (%)</label><input id="f-pos" type="number" placeholder="不限"></div>
+        </div>
+        <p class="hintline">形态对池内**每一只**判定，不截断。每只取 260 根真实日线。</p>
+      </div>
+
+      <div class="grp">
+        <div class="grp-t">按流派精算</div>
+        <div class="row2g">
+          <div class="fld">
+            <label for="f-strat">流派</label>
+            <select id="f-strat">
+              <option>金坑战法</option>
+              <option>肉肉战法</option>
+              <option>三把锁低吸</option>
+              <option>MACD</option>
+              <option>缠论</option>
+            </select>
+          </div>
+          <div class="fld"><label for="f-score">评分 ≥</label><input id="f-score" type="number" value="55"></div>
+        </div>
+        <p class="hintline">对形态命中的全部标的精算，不设 TopN；约 0.27 秒/只。</p>
+      </div>
+
+      <div class="grp">
+        <button class="btn btn-primary" type="button" id="btn-scan" style="width:100%">扫描全池形态</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 结果 -->
+  <div class="results">
+
+    <!-- 漏斗 -->
+    <section class="funnel" aria-labelledby="fn-h">
+      <div class="funnel-hd">
+        <h2 id="fn-h">筛选漏斗</h2>
+        <span class="note-txt">每一层的分母都写明，不做隐藏截断</span>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="l">全市场</div><div class="n num">5342</div><div class="d">A 股全部</div>
+          <span class="arrow" aria-hidden="true">›</span>
+        </div>
+        <div class="step">
+          <div class="l">股票池</div><div class="n num">3192</div><div class="d">主板</div>
+          <span class="arrow" aria-hidden="true">›</span>
+        </div>
+        <div class="step">
+          <div class="l">行情条件</div><div class="n num">1180</div><div class="d">本地过滤，毫秒级</div>
+          <span class="arrow" aria-hidden="true">›</span>
+        </div>
+        <div class="step">
+          <div class="l">形态命中</div><div class="n num">338</div><div class="d">全池判定</div>
+          <span class="arrow" aria-hidden="true">›</span>
+        </div>
+        <div class="step last">
+          <div class="l">流派达标</div><div class="n num">47</div><div class="d">评分 ≥ 55</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 结果表 -->
+    <section aria-labelledby="rs-h">
+      <h2 id="rs-h" class="sr-only">选股结果</h2>
+      <div class="res-toolbar">
+        <span class="lbl">共 <b style="color:var(--tx)">47</b> 只</span>
+        <span class="progress">
+          <span class="bar"><i style="width:37%"></i></span>
+          <span>形态扫描 1180 / 3192</span>
+        </span>
+        <span class="grow"></span>
+        <label class="sr-only" for="sort">排序方式</label>
+        <select id="sort" style="padding:7px 9px;border-radius:8px;border:1px solid var(--line2);background:var(--card2);color:var(--tx);font-family:inherit;font-size:12px;min-height:34px">
+          <option>按评分降序</option>
+          <option>按成交额降序</option>
+          <option>按涨跌幅降序</option>
+          <option>按换手率降序</option>
+        </select>
+        <button class="btn btn-sm" type="button" id="btn-export">导出 CSV</button>
+      </div>
+
+      <div class="res-table-wrap">
+        <div class="tbl-wrap">
+          <table class="tbl">
+            <caption class="sr-only">选股结果：47 只，按评分降序</caption>
+            <thead>
+              <tr>
+                <th>代码</th><th>名称</th><th class="r">现价</th><th class="r">涨跌</th>
+                <th class="r">成交额</th><th class="r">换手</th><th>形态</th><th class="r">评分</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="muted num">002463</td><td class="strong">沪电股份</td>
+                <td class="r num">38.42</td><td class="r up num">+2.41%</td>
+                <td class="r num">28.4 亿</td><td class="r num">4.12%</td>
+                <td><div class="tags"><span class="tag-mini hot">多头</span><span class="tag-mini vol">放量</span><span class="tag-mini new">60日新高</span></div></td>
+                <td class="r"><span class="score-cell"><span class="n" style="color:var(--up2)">88</span></span></td>
+                <td class="r"><div class="row-act"><button class="btn btn-sm" type="button" data-add="沪电股份">加自选</button></div></td>
+              </tr>
+              <tr>
+                <td class="muted num">300308</td><td class="strong">中际旭创</td>
+                <td class="r num">142.60</td><td class="r up num">+1.82%</td>
+                <td class="r num">41.2 亿</td><td class="r num">3.28%</td>
+                <td><div class="tags"><span class="tag-mini hot">多头</span><span class="tag-mini new">60日新高</span></div></td>
+                <td class="r"><span class="score-cell"><span class="n" style="color:var(--up2)">86</span></span></td>
+                <td class="r"><div class="row-act"><button class="btn btn-sm" type="button" data-add="中际旭创">加自选</button></div></td>
+              </tr>
+              <tr>
+                <td class="muted num">300251</td><td class="strong">光线传媒</td>
+                <td class="r num">12.84</td><td class="r up num">+5.21%</td>
+                <td class="r num">12.8 亿</td><td class="r num">6.84%</td>
+                <td><div class="tags"><span class="tag-mini hot">多头</span><span class="tag-mini vol">放量</span><span class="tag-mini">5日+18%</span></div></td>
+                <td class="r"><span class="score-cell"><span class="n" style="color:var(--up2)">81</span></span></td>
+                <td class="r"><div class="row-act"><button class="btn btn-sm" type="button" data-add="光线传媒">加自选</button></div></td>
+              </tr>
+              <tr>
+                <td class="muted num">002739</td><td class="strong">万达电影</td>
+                <td class="r num">11.24</td><td class="r up num">+3.84%</td>
+                <td class="r num">9.6 亿</td><td class="r num">5.12%</td>
+                <td><div class="tags"><span class="tag-mini hot">多头</span><span class="tag-mini">年内高位</span></div></td>
+                <td class="r"><span class="score-cell"><span class="n" style="color:var(--up2)">72</span></span></td>
+                <td class="r"><div class="row-act"><button class="btn btn-sm" type="button" data-add="万达电影">加自选</button></div></td>
+              </tr>
+              <tr>
+                <td class="muted num">600176</td><td class="strong">中国巨石</td>
+                <td class="r num">27.37</td><td class="r dn num">−4.19%</td>
+                <td class="r num">15.2 亿</td><td class="r num">2.84%</td>
+                <td><div class="tags"><span class="tag-mini">年内低位</span></div></td>
+                <td class="r"><span class="score-cell"><span class="n" style="color:var(--tx3)">58</span></span></td>
+                <td class="r"><div class="row-act"><button class="btn btn-sm" type="button" data-add="中国巨石">加自选</button></div></td>
+              </tr>
+              <tr>
+                <td class="muted num">601636</td><td class="strong">旗滨集团</td>
+                <td class="r num">6.12</td><td class="r dn num">−3.20%</td>
+                <td class="r num">4.8 亿</td><td class="r num">2.10%</td>
+                <td><div class="tags"><span class="tag-mini">年内低位</span></div></td>
+                <td class="r"><span class="score-cell"><span class="n" style="color:var(--tx3)">56</span></span></td>
+                <td class="r"><div class="row-act"><button class="btn btn-sm" type="button" data-add="旗滨集团">加自选</button></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- 空态（默认隐藏，供演示） -->
+        <div class="empty" id="empty" hidden>
+          <div class="t">没有符合全部条件的标的</div>
+          <div class="d">
+            当前 5 个条件叠加后剩 0 只。建议先放宽「距涨停」或「换手率 ≥ 3%」——
+            这两项最容易把池子筛空。<br>
+            <span style="color:var(--tx-disabled)">不会自动放宽条件，因为那等于替你改判断。</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="disclaim">
+    <h4>免责声明</h4>
+    <p>选股结果基于真实行情与公开算法，仅为筛选参考，不构成投资建议。形态与流派评分反映历史技术状态，不预示未来。股市有风险，投资需谨慎。</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  /* ---------- 面板折叠 ---------- */
+  var body = document.getElementById('pnl-body');
+  var fold = document.getElementById('btn-fold');
+  fold.addEventListener('click', function(){
+    var open = fold.getAttribute('aria-expanded') === 'true';
+    fold.setAttribute('aria-expanded', open ? 'false' : 'true');
+    body.hidden = open;
+    fold.textContent = open ? '展开' : '收起';
+  });
+
+  /* ---------- 实时生效提示：任一条件变化即重算（此处只做演示反馈） ---------- */
+  function announce(msg){
+    var r = document.createElement('div');
+    r.setAttribute('role','status'); r.className='sr-only'; r.textContent = msg;
+    document.body.appendChild(r);
+    setTimeout(function(){ r.remove(); }, 1600);
+  }
+  document.querySelectorAll('#pnl-body input, #pnl-body select').forEach(function(el){
+    el.addEventListener('change', function(){
+      announce('条件已更新，结果重新计算');
+    });
+  });
+
+  /* ---------- 股票池单选 ---------- */
+  document.querySelectorAll('.pool-grid button').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.pool-grid button').forEach(function(x){ x.setAttribute('aria-pressed','false'); });
+      b.setAttribute('aria-pressed','true');
+      announce('股票池切换为：' + b.textContent);
+    });
+  });
+
+  /* ---------- 重置 ---------- */
+  document.getElementById('btn-reset').addEventListener('click', function(){
+    document.getElementById('f-chg').value = 2;
+    document.getElementById('f-price').value = '';
+    document.getElementById('f-amt').value = 2;
+    document.getElementById('f-turn').value = 3;
+    document.getElementById('f-fcap').value = 50;
+    document.getElementById('f-limit').value = '';
+    document.getElementById('f-pe').value = 60;
+    document.getElementById('f-pb').value = '';
+    document.getElementById('f-g5').value = '';
+    document.getElementById('f-pos').value = '';
+    document.getElementById('f-score').value = 55;
+    announce('已重置为默认条件');
+  });
+
+  /* ---------- 扫描 ---------- */
+  var scanBtn = document.getElementById('btn-scan');
+  scanBtn.addEventListener('click', function(){
+    var origin = scanBtn.textContent;
+    scanBtn.disabled = true;
+    scanBtn.textContent = '扫描中… 0 / 3192';
+    announce('开始全池形态扫描');
+    var done = 0;
+    var timer = setInterval(function(){
+      done += 420;
+      if (done >= 3192) {
+        clearInterval(timer);
+        scanBtn.textContent = '扫描完成';
+        announce('扫描完成，3189 只成功，3 只数据不足');
+        setTimeout(function(){ scanBtn.textContent = origin; scanBtn.disabled = false; }, 1400);
+      } else {
+        scanBtn.textContent = '扫描中… ' + done + ' / 3192';
+      }
+    }, 240);
+  });
+
+  /* ---------- 导出 ---------- */
+  document.getElementById('btn-export').addEventListener('click', function(){
+    announce('已导出 47 条结果到 CSV');
+    var b = this; var o = b.textContent;
+    b.textContent = '已导出'; b.disabled = true;
+    setTimeout(function(){ b.textContent = o; b.disabled = false; }, 1300);
+  });
+
+  /* ---------- 加自选 ---------- */
+  document.querySelectorAll('[data-add]').forEach(function(b){
+    b.addEventListener('click', function(){
+      b.textContent = '已加入'; b.disabled = true;
+      announce(b.dataset.add + ' 已加入自选');
+    });
+  });
+
+  /* ---------- 排序 ---------- */
+  document.getElementById('sort').addEventListener('change', function(){
+    announce('已按「' + this.value + '」重新排序');
+  });
+})();
+</script>
+</body>
+</html>

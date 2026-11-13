@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分析台 · 高保真原型 · QuantLab</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+/* ============ 分析台页面级布局 ============ */
+.analysis{max-width:1400px;margin:0 auto;padding:var(--sp-4) var(--sp-4) var(--sp-8);
+  display:grid;gap:var(--sp-4);grid-template-columns:1fr}
+@media (min-width:1080px){
+  .analysis{grid-template-columns:264px minmax(0,1fr);align-items:start}
+}
+
+/* 自选股侧栏 */
+.watch-side{
+  background:linear-gradient(180deg,var(--card),var(--bg2));
+  border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+}
+@media (min-width:1080px){
+  .watch-side{position:sticky;top:80px;max-height:calc(100vh - 96px);overflow-y:auto}
+}
+.ws-hd{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-3) var(--sp-4);
+  border-bottom:1px solid var(--line)}
+.ws-hd h2{font-size:var(--fs-h3);font-weight:600;color:var(--tx2);flex:1 1 auto}
+.icon-btn{
+  width:34px;height:34px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  background:var(--card2);color:var(--tx2);font-size:16px;line-height:1;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+  font-family:inherit;transition:.16s;flex:0 0 auto;
+}
+.icon-btn:hover{background:var(--card3);color:var(--tx);border-color:#2E3D52}
+.ws-search{padding:var(--sp-2) var(--sp-3)}
+.ws-search input{
+  width:100%;padding:8px 10px;border-radius:var(--r-sm);
+  border:1px solid var(--line2);background:var(--card2);color:var(--tx);
+  font-family:inherit;font-size:var(--fs-xs);min-height:36px;
+}
+.ws-search input::placeholder{color:var(--tx-disabled)}
+.grp-hd{
+  display:flex;align-items:center;gap:6px;padding:8px var(--sp-4);
+  font-size:var(--fs-xs);color:var(--tx3);font-weight:600;background:var(--card2);
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+}
+.grp-hd .n{margin-left:auto;font-weight:400}
+.ws-item{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px var(--sp-2);
+  padding:9px var(--sp-4);cursor:pointer;border:none;background:none;
+  width:100%;text-align:left;font-family:inherit;transition:background .16s;
+  border-left:2px solid transparent;
+}
+.ws-item:hover{background:rgba(255,255,255,.03)}
+.ws-item[aria-current="true"]{background:rgba(246,70,93,.07);border-left-color:var(--up)}
+.ws-item .nm{font-size:var(--fs-sm);color:var(--tx);font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-item .px{font-size:var(--fs-xs);color:var(--tx2);font-variant-numeric:tabular-nums;
+  text-align:right;grid-row:1 / 3;align-self:center}
+.ws-item .cd{font-size:var(--fs-badge);color:var(--tx3);font-variant-numeric:tabular-nums}
+.ws-item .cg{font-size:var(--fs-badge);font-variant-numeric:tabular-nums;text-align:right;
+  grid-column:2;grid-row:2}
+
+/* 主列 */
+.main-col{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0}
+
+/* 结论卡 */
+.verdict-card{
+  background:linear-gradient(180deg,var(--card),var(--bg2));
+  border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+}
+.vc-top{
+  padding:var(--sp-4);display:flex;align-items:flex-start;gap:var(--sp-3);flex-wrap:wrap;
+  background:radial-gradient(340px 130px at 50% 0%, rgba(246,70,93,.10), transparent 70%);
+  border-bottom:1px solid var(--line);
+}
+.vc-top .stock{min-width:0;flex:1 1 auto}
+.vc-top .nm{font-size:var(--fs-h2);font-weight:700;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.vc-top .nm h1{font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-height:inherit;margin:0}
+.vc-top .nm .cd{font-size:var(--fs-xs);color:var(--tx3);font-weight:400;letter-spacing:.6px}
+.vc-top .sub{font-size:var(--fs-xs);color:var(--tx3);margin-top:2px}
+.vc-top .px{text-align:right;flex:0 0 auto}
+.vc-top .px .p{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.8px;line-height:1.15}
+.vc-top .px .c{font-size:var(--fs-sm);font-weight:600;font-variant-numeric:tabular-nums}
+.vc-top .px .p.up{color:var(--up2)} .vc-top .px .p.dn{color:var(--dn2)}
+.vc-top .px .c.up{color:var(--up2)} .vc-top .px .c.dn{color:var(--dn2)}
+
+.vc-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (min-width:900px){ .vc-grid{grid-template-columns:repeat(4,minmax(0,1fr))} }
+.vc-cell{padding:var(--sp-3) var(--sp-4);border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0}
+.vc-cell:nth-child(2n){border-right:none}
+@media (min-width:900px){
+  .vc-cell{border-bottom:none}
+  .vc-cell:nth-child(2n){border-right:1px solid var(--line)}
+  .vc-cell:last-child{border-right:none}
+}
+.vc-cell .k{font-size:var(--fs-xs);color:var(--tx3);letter-spacing:.5px;margin-bottom:6px;font-weight:600}
+.vc-cell .row{display:flex;justify-content:space-between;gap:var(--sp-2);font-size:var(--fs-xs);
+  color:var(--tx2);padding:3px 0}
+.vc-cell .row b{color:var(--tx);font-weight:600;font-variant-numeric:tabular-nums}
+.vc-cell .txt{font-size:var(--fs-xs);color:var(--tx2);line-height:1.6}
+
+/* 图表卡 */
+.chart-card{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);
+  border-radius:var(--r-lg);overflow:hidden}
+.chart-toolbar{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);
+  border-bottom:1px solid var(--line);flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--card2);border:1px solid var(--line2);
+  border-radius:var(--r-sm);overflow:hidden}
+.seg button{
+  padding:7px 12px;border:none;background:transparent;color:var(--tx2);
+  font-family:inherit;font-size:var(--fs-xs);font-weight:600;cursor:pointer;
+  min-height:34px;transition:.16s;white-space:nowrap;
+}
+.seg button:hover{background:var(--card3);color:var(--tx)}
+.seg button[aria-pressed="true"]{background:#1E2A3B;color:#fff}
+.chart-toolbar .lbl{font-size:var(--fs-xs);color:var(--tx3)}
+.chart-toolbar .grow{flex:1 1 auto}
+
+/* 40 流派选择器 */
+.strategy-picker{border-bottom:1px solid var(--line)}
+.sp-hd{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3)}
+.sp-hd .lbl{font-size:var(--fs-xs);color:var(--tx3);white-space:nowrap}
+.sp-search{
+  flex:0 1 220px;min-width:120px;padding:7px 10px;border-radius:var(--r-sm);
+  border:1px solid var(--line2);background:var(--card2);color:var(--tx);
+  font-family:inherit;font-size:var(--fs-xs);min-height:34px;
+}
+.sp-search::placeholder{color:var(--tx-disabled)}
+.sp-count{font-size:var(--fs-badge);color:var(--tx3);white-space:nowrap}
+.sp-tabs{
+  display:flex;gap:6px;padding:0 var(--sp-3) var(--sp-2);
+  overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.sp-tabs::-webkit-scrollbar{display:none}
+.sp-tabs [role="tab"]{
+  flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;
+  padding:7px 12px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  background:var(--card2);color:var(--tx2);font-family:inherit;
+  font-size:var(--fs-xs);font-weight:600;cursor:pointer;min-height:36px;
+  white-space:nowrap;transition:.16s;
+}
+.sp-tabs [role="tab"]:hover{background:var(--card3);color:var(--tx);border-color:#2E3D52}
+.sp-tabs [role="tab"][aria-selected="true"]{
+  background:linear-gradient(180deg,#22131A,#16101A);color:#fff;border-color:#5A2230;
+}
+.sp-tabs [role="tab"] .sw{width:5px;height:5px;border-radius:50%;flex:0 0 auto}
+.sp-tabs [role="tab"][hidden]{display:none}
+
+/* 图表画布 */
+.chart-wrap{position:relative;padding:var(--sp-2) var(--sp-2) 0}
+#kline{display:block;width:100%;height:auto}
+.chart-foot{padding:var(--sp-2) var(--sp-3) var(--sp-3);display:flex;gap:var(--sp-3);
+  flex-wrap:wrap;font-size:var(--fs-badge);color:var(--tx3)}
+.chart-foot span{display:inline-flex;align-items:center;gap:5px}
+.chart-foot i{width:12px;height:2px;border-radius:1px;flex:0 0 auto}
+
+/* 流派解读 */
+.insight-card{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);
+  border-radius:var(--r-lg);padding:var(--sp-4)}
+.ins-head{display:flex;align-items:flex-start;gap:var(--sp-3);margin-bottom:var(--sp-3);flex-wrap:wrap}
+.ins-badge{
+  width:40px;height:40px;border-radius:var(--r-md);flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  font-size:var(--fs-xs);font-weight:700;line-height:1;text-align:center;
+}
+.ins-title{font-size:var(--fs-h2);font-weight:600}
+.ins-sub{font-size:var(--fs-xs);color:var(--tx3);margin-top:2px}
+.ins-score{margin-left:auto;text-align:right;flex:0 0 auto}
+.ins-score .n{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.8px;line-height:1.1}
+.ins-score .l{font-size:var(--fs-badge);color:var(--tx3)}
+.ins-verdict{
+  font-size:var(--fs-sm);color:var(--tx2);line-height:1.8;
+  padding-left:13px;border-left:2px solid var(--line2);margin-bottom:var(--sp-4);
+}
+.pts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--sp-2)}
+.pt{background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:10px 12px;min-width:0}
+.pt .k{font-size:var(--fs-badge);color:var(--tx3);letter-spacing:.5px;margin-bottom:3px;font-weight:600}
+.pt .v{font-size:var(--fs-xs);color:var(--tx2);line-height:1.6}
+
+/* 评分总览 */
+.overview-card{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);
+  border-radius:var(--r-lg);overflow:hidden}
+.srow{display:flex;align-items:center;gap:var(--sp-3);padding:6px var(--sp-4)}
+.srow .nm{flex:0 0 96px;font-size:var(--fs-xs);color:var(--tx2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow .track{flex:1;height:6px;background:var(--card2);border-radius:4px;position:relative;overflow:hidden;min-width:40px}
+.srow .track::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:#2A3547}
+.srow .fill{position:absolute;top:0;bottom:0;border-radius:3px}
+.srow .num{flex:0 0 40px;text-align:right;font-size:var(--fs-xs);font-weight:600;
+  font-variant-numeric:tabular-nums}
+.srow.off .num{flex:0 0 52px;font-size:var(--fs-badge);color:var(--tx-disabled);font-weight:400}
+.ov-more{padding:var(--sp-3) var(--sp-4);border-top:1px solid var(--line);text-align:center}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">跳到主内容</a>
+
+<header>
+  <div class="hd">
+    <div class="brand"><div class="logo" aria-hidden="true">QL</div><b>QuantLab</b></div>
+    <nav aria-label="主导航">
+      <a href="today.html">今日一页</a>
+      <a href="watch.html">观察池</a>
+      <a href="lab.html">策略实验室</a>
+      <a href="analysis.html" aria-current="page">分析台</a>
+      <a href="screener.html" class="tool">选股器</a>
+    </nav>
+    <div class="hd-status">
+      <span class="tag ok"><span class="dot" aria-hidden="true"></span>实时</span>
+      <span class="tag">15:04:22</span>
+    </div>
+  </div>
+</header>
+
+<div class="note">
+  <div role="note">设计原型 · 示意数据。重点看：① 40 个流派 Tab 的键盘导航与搜索过滤 ② 图表与解读的双向对应 ③ 1080px 以下自选股侧栏如何折叠</div>
+</div>
+
+<main id="main" class="analysis">
+
+  <!-- 自选股 -->
+  <section class="watch-side" aria-labelledby="ws-title">
+    <div class="ws-hd">
+      <h2 id="ws-title">自选股</h2>
+      <button class="icon-btn" type="button" aria-label="新建分组">+</button>
+    </div>
+    <div class="ws-search">
+      <label class="sr-only" for="ws-q">搜索自选股</label>
+      <input id="ws-q" type="search" placeholder="搜索代码或名称">
+    </div>
+
+    <div class="grp-hd">核心持仓 <span class="n">4</span></div>
+    <button class="ws-item" type="button" aria-current="true">
+      <span class="nm">浙文互联</span>
+      <span class="px num">7.46</span>
+      <span class="cd num">600986</span>
+      <span class="cg num" style="color:var(--dn2)">−1.84%</span>
+    </button>
+    <button class="ws-item" type="button">
+      <span class="nm">东山精密</span>
+      <span class="px num">84.37</span>
+      <span class="cd num">002384</span>
+      <span class="cg num" style="color:var(--dn2)">−9.95%</span>
+    </button>
+    <button class="ws-item" type="button">
+      <span class="nm">中际旭创</span>
+      <span class="px num">142.60</span>
+      <span class="cd num">300308</span>
+      <span class="cg num" style="color:var(--up2)">+1.82%</span>
+    </button>
+    <button class="ws-item" type="button">
+      <span class="nm">沪电股份</span>
+      <span class="px num">38.42</span>
+      <span class="cd num">002463</span>
+      <span class="cg num" style="color:var(--up2)">+2.41%</span>
+    </button>
+
+    <div class="grp-hd">题材跟踪 <span class="n">2</span></div>
+    <button class="ws-item" type="button">
+      <span class="nm">光线传媒</span>
+      <span class="px num">12.84</span>
+      <span class="cd num">300251</span>
+      <span class="cg num" style="color:var(--up2)">+5.21%</span>
+    </button>
+    <button class="ws-item" type="button">
+      <span class="nm">万达电影</span>
+      <span class="px num">11.24</span>
+      <span class="cd num">002739</span>
+      <span class="cg num" style="color:var(--up2)">+3.84%</span>
+    </button>
+
+    <div class="grp-hd">指数 <span class="n">3</span></div>
+    <button class="ws-item" type="button">
+      <span class="nm">上证指数</span>
+      <span class="px num">3421.5</span>
+      <span class="cd num">sh000001</span>
+      <span class="cg num" style="color:var(--dn2)">−0.62%</span>
+    </button>
+    <button class="ws-item" type="button">
+      <span class="nm">创业板指</span>
+      <span class="px num">2183.7</span>
+      <span class="cd num">sz399006</span>
+      <span class="cg num" style="color:var(--up2)">+0.94%</span>
+    </button>
+    <button class="ws-item" type="button">
+      <span class="nm">沪深300</span>
+      <span class="px num">4012.3</span>
+      <span class="cd num">sh000300</span>
+      <span class="cg num" style="color:var(--dn2)">−0.21%</span>
+    </button>
+  </section>
+
+  <!-- 主列 -->
+  <div class="main-col">
+
+    <!-- 结论卡 -->
+    <section class="verdict-card" aria-labelledby="vc-h">
+      <div class="vc-top">
+        <div class="stock">
+          <div class="nm"><h1 id="vc-h">浙文互联<span class="sr-only">（分析台）</span></h1><span class="cd">600986.SH</span>
+            <span class="chip chip-warn" style="margin:0">数据可用</span></div>
+          <div class="sub">日线 · 1200 根 · 前复权 · 更新 15:04:22</div>
+        </div>
+        <div class="px">
+          <div class="p dn num">7.46</div>
+          <div class="c dn num">−0.14　−1.84%</div>
+        </div>
+      </div>
+
+      <div class="vc-grid">
+        <div class="vc-cell">
+          <div class="k">盘面诊断</div>
+          <div class="row"><span>成交额</span><b>5.96 亿</b></div>
+          <div class="row"><span>换手率</span><b>5.31%</b></div>
+          <div class="row"><span>量比</span><b>1.12</b></div>
+        </div>
+        <div class="vc-cell">
+          <div class="k">多空力量</div>
+          <div class="row"><span>涨跌家数</span><b>1284 / 3742</b></div>
+          <div class="row"><span>市场宽度</span><b>58%</b></div>
+          <div class="row"><span>涨停</span><b>47</b></div>
+        </div>
+        <div class="vc-cell">
+          <div class="k">关键价位</div>
+          <div class="row"><span>MA20</span><b>7.62</b></div>
+          <div class="row"><span>MA60</span><b>7.38</b></div>
+          <div class="row"><span>20 日高</span><b>8.15</b></div>
+        </div>
+        <div class="vc-cell">
+          <div class="k">操作建议</div>
+          <div class="txt">
+            已跌破 MA20，趋势转弱。若明日不能收回 7.62，减仓至半仓以下；不加仓。
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 图表卡 -->
+    <section class="chart-card" aria-labelledby="ch-h">
+      <div class="chart-toolbar">
+        <h2 id="ch-h" class="sr-only">K 线与流派</h2>
+        <span class="lbl">周期</span>
+        <div class="seg" role="group" aria-label="K线周期">
+          <button type="button" aria-pressed="true">日</button>
+          <button type="button" aria-pressed="false">周</button>
+          <button type="button" aria-pressed="false">月</button>
+        </div>
+        <span class="lbl">根数</span>
+        <div class="seg" role="group" aria-label="K线根数">
+          <button type="button" aria-pressed="false">90</button>
+          <button type="button" aria-pressed="true">250</button>
+          <button type="button" aria-pressed="false">全部</button>
+        </div>
+        <span class="grow"></span>
+        <button class="btn btn-sm" type="button" aria-pressed="false">副图跟随流派</button>
+      </div>
+
+      <!-- 40 流派选择器 -->
+      <div class="strategy-picker">
+        <div class="sp-hd">
+          <span class="lbl">流派</span>
+          <label class="sr-only" for="sp-q">筛选流派</label>
+          <input id="sp-q" class="sp-search" type="search" placeholder="搜索流派，如 MACD / 缠论">
+          <span class="sp-count" id="sp-count" role="status">共 40 个</span>
+        </div>
+        <div class="sp-tabs" role="tablist" aria-label="技术流派">
+          <!-- 由 JS 生成 40 个 tab -->
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <svg id="kline" viewBox="0 0 900 420" preserveAspectRatio="none"
+             role="img" aria-label="浙文互联日线 K 线图，含 MA20 与 MA60，当前跌破 MA20"></svg>
+      </div>
+      <div class="chart-foot">
+        <span><i style="background:#E8EDF5"></i>收盘</span>
+        <span><i style="background:#6BA5FF"></i>MA20</span>
+        <span><i style="background:#E8B84B"></i>MA60</span>
+        <span style="margin-left:auto">按住 Shift 滚轮缩放 · 方向键平移</span>
+      </div>
+    </section>
+
+    <!-- 流派解读 -->
+    <section class="insight-card" aria-labelledby="ins-h">
+      <div class="ins-head">
+        <div class="ins-badge" style="background:rgba(232,184,75,.14);color:#E8B84B;border:1px solid rgba(232,184,75,.3)">MACD</div>
+        <div>
+          <div class="ins-title" id="ins-h">MACD</div>
+          <div class="ins-sub">趋势类 · 参数 12 / 26 / 9</div>
+        </div>
+        <div class="ins-score">
+          <div class="n" style="color:var(--up2)">−34</div>
+          <div class="l">偏空</div>
+        </div>
+      </div>
+
+      <p class="ins-verdict">
+        DIF 与 DEA 均在零轴下方，且 DIF 位于 DEA 之下，属空头排列。近 3 日绿柱持续放大，
+        下跌动能在增强。尚未出现底背离——价格创新低而 DIF 未创新低的结构还没形成，
+        因此当前位置不具备"抄底"的技术依据。
+      </p>
+
+      <div class="pts">
+        <div class="pt"><div class="k">DIF</div><div class="v num">−0.052（零轴下方）</div></div>
+        <div class="pt"><div class="k">DEA</div><div class="v num">−0.031（零轴下方）</div></div>
+        <div class="pt"><div class="k">柱状值</div><div class="v num">−0.021（绿柱放大 3 日）</div></div>
+        <div class="pt"><div class="k">背离检查</div><div class="v">无底背离，价格与 DIF 同步新低</div></div>
+        <div class="pt"><div class="k">零轴位置</div><div class="v">双线在零轴下方，反弹属弱势反弹</div></div>
+        <div class="pt"><div class="k">结论口径</div><div class="v">仅描述技术状态，不构成买卖建议</div></div>
+      </div>
+    </section>
+
+    <!-- 全流派评分总览 -->
+    <section class="overview-card" aria-labelledby="ov-h">
+      <div class="card-hd">
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--up)" aria-hidden="true"></span>
+        <h2 id="ov-h">全流派评分总览</h2>
+        <span class="chip chip-c" style="margin-left:auto">40 个流派</span>
+      </div>
+      <div id="overview" style="padding:var(--sp-2) 0"></div>
+      <div class="ov-more">
+        <button class="btn btn-sm" type="button" id="ov-toggle">展开全部 40 个</button>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="disclaim">
+    <h4>免责声明</h4>
+    <p>本页所有技术指标与流派评分为公开算法计算结果，不构成投资建议。数据来自公开行情接口，可能存在延迟。股市有风险，投资需谨慎。</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  /* ========== 40 流派定义（含颜色与分类） ========== */
+  var STRATS = [
+    ['ma','均线系统','#4C8DFF'],       ['macd','MACD','#E8B84B'],
+    ['kdj','KDJ','#A882FF'],           ['rsi','RSI 强弱','#35D0D0'],
+    ['boll','布林带','#7FB0FF'],       ['dow','道氏理论','#FF9F6B'],
+    ['wave','波浪理论','#FF8FB1'],     ['gann','江恩理论','#E8B84B'],
+    ['chan','缠论','#8CD9A0'],         ['pattern','形态学','#F0A45B'],
+    ['fib','斐波那契','#C9A227'],      ['volume','量价理论','#6FD3C7'],
+    ['chip','筹码分布','#B48CFF'],     ['sentiment','情绪博弈','#FF6B9D'],
+    ['limit','涨停板','#FF5A5F'],      ['leader','龙头战法','#FF7043'],
+    ['cmf','资金流 CMF','#4DD0E1'],    ['turnover','换手率','#9CCC65'],
+    ['gap','缺口理论','#BA68C8'],      ['wres','周线共振','#7986CB'],
+    ['donch','唐奇安通道','#4DB6AC'],  ['ichimoku','一目均衡表','#FFB74D'],
+    ['rs','相对强弱 RS','#9575CD'],    ['volcycle','量能周期','#4FC3F7'],
+    ['adx','ADX 趋势强度','#AED581'],  ['bias','乖离率 BIAS','#F06292'],
+    ['kform','K 线形态','#FFD54F'],    ['hammer','锤子线','#81C784'],
+    ['shooting','射击之星','#E57373'], ['bullengulf','看涨吞没','#4DD0C4'],
+    ['bearengulf','看跌吞没','#BA8B8B'],['doji','十字星','#B0BEC5'],
+    ['red3','红三兵','#EF5350'],       ['crow3','三只乌鸦','#66BB6A'],
+    ['bigyang','放量长阳','#FF8A65'],  ['jinkeng','金坑战法','#FFCA28'],
+    ['rourou','肉肉战法','#F48FB1'],   ['sho','简谐振荡','#80DEEA'],
+    ['albrooks','价格行为','#FFAB91'], ['limitpull','涨停回踩20','#FF5252']
+  ];
+
+  /* ========== 生成 Tab ========== */
+  var tablist = document.querySelector('.sp-tabs');
+  var countEl = document.getElementById('sp-count');
+  var frag = document.createDocumentFragment();
+  STRATS.forEach(function(s, i){
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role','tab');
+    b.id = 'st-' + s[0];
+    b.setAttribute('aria-selected', i === 1 ? 'true' : 'false');
+    b.tabIndex = i === 1 ? 0 : -1;
+    b.dataset.name = s[1];
+    b.innerHTML = '<span class="sw" style="background:' + s[2] + '" aria-hidden="true"></span>' + s[1];
+    frag.appendChild(b);
+  });
+  tablist.appendChild(frag);
+
+  var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+
+  function selectTab(i, focus){
+    tabs.forEach(function(t, k){
+      var on = k === i;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+    });
+    if (focus) {
+      tabs[i].focus();
+      tabs[i].scrollIntoView({ block:'nearest', inline:'center' });
+    }
+  }
+
+  tabs.forEach(function(t, i){
+    t.addEventListener('click', function(){ selectTab(i); });
+    t.addEventListener('keydown', function(e){
+      // 只在可见 tab 之间移动（搜索过滤后仍正确）
+      var visible = tabs.filter(function(x){ return !x.hidden; });
+      var idx = visible.indexOf(t);
+      if (idx < 0) return;
+      var n = null;
+      if (e.key === 'ArrowRight') n = (idx + 1) % visible.length;
+      else if (e.key === 'ArrowLeft') n = (idx - 1 + visible.length) % visible.length;
+      else if (e.key === 'Home') n = 0;
+      else if (e.key === 'End') n = visible.length - 1;
+      if (n !== null) {
+        e.preventDefault();
+        selectTab(tabs.indexOf(visible[n]), true);
+      }
+    });
+  });
+
+  /* ========== 流派搜索过滤 ========== */
+  var q = document.getElementById('sp-q');
+  q.addEventListener('input', function(){
+    var v = this.value.trim().toLowerCase();
+    var shown = 0;
+    tabs.forEach(function(t){
+      var hit = !v || t.dataset.name.toLowerCase().indexOf(v) >= 0;
+      t.hidden = !hit;
+      if (hit) shown++;
+    });
+    countEl.textContent = v ? '匹配 ' + shown + ' 个' : '共 ' + STRATS.length + ' 个';
+    // 若当前选中的被过滤掉，落到第一个可见项
+    var cur = tabs.findIndex(function(t){ return t.getAttribute('aria-selected') === 'true'; });
+    if (cur >= 0 && tabs[cur].hidden) {
+      var first = tabs.findIndex(function(t){ return !t.hidden; });
+      if (first >= 0) selectTab(first);
+    }
+  });
+
+  /* ========== 评分总览 ========== */
+  var SCORES = [
+    ['均线系统', -42], ['MACD', -34], ['KDJ', -28], ['RSI 强弱', -18],
+    ['布林带', -46], ['道氏理论', -22], ['波浪理论', 12], ['江恩理论', -8],
+    ['缠论', -51], ['形态学', -30], ['斐波那契', -15], ['量价理论', -38],
+    ['筹码分布', -25], ['情绪博弈', -44], ['涨停板', null], ['龙头战法', null],
+    ['资金流 CMF', -36], ['换手率', -12], ['缺口理论', 6], ['周线共振', -20],
+    ['唐奇安通道', -33], ['一目均衡表', -40], ['相对强弱 RS', -27], ['量能周期', -19],
+    ['ADX 趋势强度', 18], ['乖离率 BIAS', -49], ['K 线形态', -14], ['锤子线', 9],
+    ['射击之星', -11], ['看涨吞没', 4], ['看跌吞没', -16], ['十字星', 0],
+    ['红三兵', 14], ['三只乌鸦', -21], ['放量长阳', 8], ['金坑战法', -35],
+    ['肉肉战法', -24], ['简谐振荡', -31], ['价格行为', -26], ['涨停回踩20', null]
+  ];
+  var overview = document.getElementById('overview');
+  function bar(v){
+    if (v === null) return '<span class="num">不适用</span>';
+    var w = Math.min(50, Math.abs(v) / 2);
+    var color = v > 0 ? 'var(--up)' : v < 0 ? 'var(--dn)' : 'var(--tx3)';
+    var left = v > 0 ? 50 : 50 - w;
+    return '<span class="track"><i class="fill" style="left:' + left + '%;width:' + w + '%;background:' + color + '"></i></span>' +
+           '<span class="num" style="color:' + color + '">' + (v > 0 ? '+' : '') + v + '</span>';
+  }
+  function renderOverview(limit){
+    var show = limit ? SCORES.slice(0, limit) : SCORES;
+    overview.innerHTML = show.map(function(s){
+      return '<div class="srow' + (s[1] === null ? ' off' : '') + '">' +
+             '<span class="nm">' + s[0] + '</span>' + bar(s[1]) + '</div>';
+    }).join('');
+  }
+  renderOverview(10);
+  var expanded = false;
+  var ovBtn = document.getElementById('ov-toggle');
+  ovBtn.addEventListener('click', function(){
+    expanded = !expanded;
+    renderOverview(expanded ? 0 : 10);
+    ovBtn.textContent = expanded ? '收起' : '展开全部 40 个';
+    ovBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  });
+
+  /* ========== 自选股切换 ========== */
+  function announce(msg){
+    var r = document.createElement('div');
+    r.setAttribute('role','status'); r.className='sr-only'; r.textContent = msg;
+    document.body.appendChild(r);
+    setTimeout(function(){ r.remove(); }, 1600);
+  }
+
+  var wsItems = document.querySelectorAll('.ws-item');
+  wsItems.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      wsItems.forEach(function(x){ x.removeAttribute('aria-current'); });
+      btn.setAttribute('aria-current','true');
+
+      var nm = btn.querySelector('.nm').textContent;
+      var px = btn.querySelector('.px').textContent;
+      var cd = btn.querySelector('.cd').textContent;
+      var cg = btn.querySelector('.cg').textContent;
+      var isDown = cg.trim().charAt(0) === '−' || cg.trim().charAt(0) === '-';
+
+      var vcH = document.getElementById('vc-h');
+      vcH.innerHTML = nm + '<span class="sr-only">（分析台）</span>';
+      document.querySelector('.vc-top .cd').textContent =
+        (cd.length > 6 ? cd.toUpperCase() : cd + '.SH');
+      var pEl = document.querySelector('.vc-top .px .p');
+      var cEl = document.querySelector('.vc-top .px .c');
+      pEl.textContent = px;
+      pEl.className = 'p num ' + (isDown ? 'dn' : 'up');
+      cEl.textContent = cg + '　' + (isDown ? '走弱' : '走强');
+      cEl.className = 'c num ' + (isDown ? 'dn' : 'up');
+      announce('已切换到 ' + nm + '，' + px + ' 元');
+    });
+  });
+
+  /* ========== 新建分组 ========== */
+  document.querySelector('.icon-btn').addEventListener('click', function(){
+    announce('新建分组（原型未实装输入框）');
+  });
+
+  /* ========== 分段按钮（周期 / 根数）互斥 ========== */
+  document.querySelectorAll('.seg[role="group"]').forEach(function(g){
+    var btns = g.querySelectorAll('button');
+    btns.forEach(function(b){
+      b.addEventListener('click', function(){
+        btns.forEach(function(x){ x.setAttribute('aria-pressed','false'); });
+        b.setAttribute('aria-pressed','true');
+        announce('已切换到：' + b.textContent + (g.getAttribute('aria-label') || ''));
+      });
+    });
+  });
+
+  /* ========== 副图跟随流派 ========== */
+  var subBtn = document.querySelector('.chart-toolbar .btn');
+  subBtn.addEventListener('click', function(){
+    var on = subBtn.getAttribute('aria-pressed') === 'true';
+    subBtn.setAttribute('aria-pressed', on ? 'false' : 'true');
+    announce(on ? '副图已固定' : '副图将跟随当前流派切换');
+  });
+
+  /* ========== K 线（示意，确定性伪随机） ========== */
+  var svg = document.getElementById('kline');
+  var W = 900, H = 420, PADL = 8, PADR = 62, PADT = 12;
+  var N = 68;
+  var seed = 20261113;
+  function rnd(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+
+  var price = 7.95, candles = [];
+  for (var i = 0; i < N; i++){
+    var drift = -0.006;
+    if (i > 44 && i < 56) drift = 0.012;         // 中段一波反弹
+    var o = price;
+    var c = o * (1 + drift + (rnd() - 0.5) * 0.035);
+    var hi = Math.max(o, c) * (1 + rnd() * 0.012);
+    var lo = Math.min(o, c) * (1 - rnd() * 0.012);
+    candles.push({ o:o, c:c, h:hi, l:lo, v: 0.4 + rnd() * 0.9 });
+    price = c;
+  }
+  var maxP = Math.max.apply(null, candles.map(function(d){ return d.h; }));
+  var minP = Math.min.apply(null, candles.map(function(d){ return d.l; }));
+  var volH = 58, chartH = H - volH - 24;
+  var step = (W - PADL - PADR) / N;
+  var bw = Math.max(3, step * 0.62);
+  var y = function(p){ return PADT + (maxP - p) / (maxP - minP) * (chartH - PADT); };
+
+  function ma(period){
+    return candles.map(function(_, i){
+      if (i < period - 1) return null;
+      var s = 0; for (var k = i - period + 1; k <= i; k++) s += candles[k].c;
+      return s / period;
+    });
+  }
+  function path(series){
+    var d = '', started = false;
+    series.forEach(function(v, i){
+      if (v === null) return;
+      var x = PADL + step * i + step / 2;
+      d += (started ? 'L' : 'M') + x.toFixed(1) + ' ' + y(v).toFixed(1);
+      started = true;
+    });
+    return d;
+  }
+
+  var out = '';
+  // 网格
+  out += '<g stroke="#1A2230" stroke-width="1">';
+  for (var g = 0; g <= 4; g++){
+    var gy = PADT + (chartH - PADT) / 4 * g;
+    out += '<line x1="' + PADL + '" y1="' + gy + '" x2="' + (W - PADR) + '" y2="' + gy + '"/>';
+  }
+  out += '</g>';
+  // 右侧价格刻度
+  out += '<g fill="#828FA5" font-size="10" font-family="sans-serif">';
+  for (var g2 = 0; g2 <= 4; g2++){
+    var p = maxP - (maxP - minP) / 4 * g2;
+    var gy2 = PADT + (chartH - PADT) / 4 * g2;
+    out += '<text x="' + (W - PADR + 8) + '" y="' + (gy2 + 3) + '">' + p.toFixed(2) + '</text>';
+  }
+  out += '</g>';
+  // 蜡烛
+  candles.forEach(function(d, i){
+    var x = PADL + step * i + step / 2;
+    var up = d.c >= d.o;
+    var color = up ? '#F6465D' : '#2EBD85';
+    out += '<line x1="' + x.toFixed(1) + '" y1="' + y(d.h).toFixed(1) + '" x2="' + x.toFixed(1) +
+           '" y2="' + y(d.l).toFixed(1) + '" stroke="' + color + '" stroke-width="1"/>';
+    var top = y(Math.max(d.o, d.c)), bot = y(Math.min(d.o, d.c));
+    out += '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + bw.toFixed(1) +
+           '" height="' + Math.max(1, bot - top).toFixed(1) + '" fill="' + color + '"/>';
+  });
+  // 均线
+  out += '<path d="' + path(ma(20)) + '" fill="none" stroke="#6BA5FF" stroke-width="1.4" opacity=".9"/>';
+  out += '<path d="' + path(ma(60)) + '" fill="none" stroke="#E8B84B" stroke-width="1.4" opacity=".9"/>';
+  // 成交量
+  var volTop = chartH + 12;
+  var maxV = Math.max.apply(null, candles.map(function(d){ return d.v; }));
+  candles.forEach(function(d, i){
+    var x = PADL + step * i + step / 2;
+    var h2 = (d.v / maxV) * volH;
+    var up = d.c >= d.o;
+    out += '<rect x="' + (x - bw / 2).toFixed(1) + '" y="' + (volTop + volH - h2).toFixed(1) +
+           '" width="' + bw.toFixed(1) + '" height="' + h2.toFixed(1) +
+           '" fill="' + (up ? '#F6465D' : '#2EBD85') + '" opacity=".45"/>';
+  });
+  // 当前价标注
+  var last = candles[candles.length - 1];
+  out += '<line x1="' + PADL + '" y1="' + y(last.c).toFixed(1) + '" x2="' + (W - PADR) +
+         '" y2="' + y(last.c).toFixed(1) + '" stroke="#828FA5" stroke-dasharray="3 3" stroke-width="1"/>';
+  out += '<rect x="' + (W - PADR + 2) + '" y="' + (y(last.c) - 9).toFixed(1) +
+         '" width="' + (PADR - 6) + '" height="18" rx="3" fill="#2EBD85"/>';
+  out += '<text x="' + (W - PADR + 8) + '" y="' + (y(last.c) + 4).toFixed(1) +
+         '" fill="#080B11" font-size="11" font-weight="700" font-family="sans-serif">' +
+         last.c.toFixed(2) + '</text>';
+
+  svg.innerHTML = out;
+})();
+</script>
+</body>
+</html>
