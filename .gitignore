@@ -18,3 +18,6 @@ npm-debug.log*
 
 # macOS
 .DS_Store
+
+# 本地助手工作目录（会话记忆、临时产物），不参与版本管理
+.workbuddy/
