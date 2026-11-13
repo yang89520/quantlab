@@ -1,5 +1,20 @@
+# 依赖
 node_modules/
-tools/__pycache__/
+
+# Python 缓存（回测脚本）
+__pycache__/
 *.pyc
+
+# 运行时产物：形态扫描缓存按交易日落盘，属可再生数据，不入版本库
 data/shape-cache.json
+# 自选股 store.json 的原子写临时文件
+data/*.tmp
+
+# 日志与本地环境
+*.log
+npm-debug.log*
+.env
+.env.*
+
+# macOS
 .DS_Store
