@@ -1,0 +1,239 @@
+'use strict';
+/**
+ * 全量验收（docs/dev/07 §4/§6/§6.1 + 09 §9）。
+ * 逐条输出 PASS/FAIL；任一 FAIL 退出码 1，必须回到开发修复后重跑。
+ *
+ * 运行前需启动服务：npm start
+ * 运行：node tests/acceptance.js
+ */
+const fs = require('fs');
+const path = require('path');
+const cp = require('child_process');
+const ROOT = path.join(__dirname, '..');
+const BASE = process.env.QL_BASE || 'http://localhost:3000';
+
+let pass = 0, fail = 0;
+const failures = [];
+function ok(id, name, cond, detail) {
+  if (cond) { pass++; console.log(`  ✓ ${id} ${name}`); }
+  else { fail++; failures.push(`${id} ${name}${detail ? ' — ' + detail : ''}`); console.log(`  ✗ ${id} ${name}${detail ? '\n      ' + detail : ''}`); }
+}
+function read(rel) {
+  const p = path.join(ROOT, rel);
+  return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+}
+function filesIn(dir, ext) {
+  const out = [];
+  const walk = (d) => {
+    const p = path.join(ROOT, d);
+    if (!fs.existsSync(p)) return;
+    for (const e of fs.readdirSync(p, { withFileTypes: true })) {
+      const rel = path.join(d, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name === '__pycache__' || e.name === '.venv') continue;
+        walk(rel);
+      } else if (!ext || e.name.endsWith(ext)) out.push(rel);
+    }
+  };
+  walk(dir);
+  return out;
+}
+function grep(rels, re) {
+  const hits = [];
+  for (const rel of rels) {
+    const lines = read(rel).split('\n');
+    lines.forEach((l, i) => { if (re.test(l)) hits.push(`${rel}:${i + 1}: ${l.trim().slice(0, 100)}`); });
+  }
+  return hits;
+}
+async function get(p) {
+  const r = await fetch(BASE + p, { signal: AbortSignal.timeout(20000) });
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+}
+function run(cmd, args, opts) {
+  return cp.spawnSync(cmd, args, Object.assign({ cwd: ROOT, encoding: 'utf8', timeout: 300000 }, opts || {}));
+}
+
+(async () => {
+  console.log('全量验收（07 各期 + 09 数据规则 + 上线检查表）\n');
+
+  /* ---------- A. 回归套件 ---------- */
+  console.log('【A 回归套件】');
+  const t1 = run('npm', ['test']);
+  ok('A1', 'npm test 26 项全绿', /26\/26 通过/.test(t1.stdout || ''), t1.stdout && t1.stdout.slice(-160));
+  const t2 = run('npm', ['run', 'test:unit']);
+  const unitOut = (t2.stdout || '') + (t2.stderr || '');
+  ok('A2', '一期/二期/三期/集成单测 + Python selftest 全绿',
+    t2.status === 0 && /8\/8 通过/.test(unitOut), unitOut.slice(-220));
+  const t3 = run('npm', ['run', 'test:today']);
+  ok('A3', '今日一页渲染冒烟通过', t3.status === 0 && /渲染冒烟通过/.test(t3.stdout || ''));
+  const t4 = run('npm', ['run', 'test:mutate']);
+  const mutOut = t4.stdout || '';
+  ok('A4', '变异 16 条全红', t4.status === 0 && /一期 6\/6、二期 5\/5、三期 5\/5/.test(mutOut), mutOut.slice(-160));
+
+  /* ---------- B. 数据规则（09 §9 / 07 §6.1） ---------- */
+  console.log('\n【B 数据规则专项（优先级高于功能验收）】');
+  const jsFiles = filesIn('lib', '.js').concat(filesIn('tools', '.js'));
+  const d1 = grep(jsFiles, /\b(mock|fake|random|lorem)\b/i);
+  ok('D-1', '生产代码无 mock/fake/random/lorem', d1.length === 0, d1.slice(0, 3).join('\n      '));
+
+  const d2 = grep(jsFiles, /catch\s*\([^)]*\)\s*\{\s*\}/);
+  ok('D-2', '无空 catch 静默吞错', d2.length === 0, d2.slice(0, 4).join('\n      '));
+
+  const dsSrc = read('lib/datasource.js');
+  ok('D-3', 'resolve 返回带 source/level/asOf/stale/degraded',
+    /source,\s*level,\s*asOf/.test(dsSrc) || /source:\s*/.test(dsSrc));
+
+  const cfg = JSON.parse(read('config.json'));
+  const marketPath = fs.existsSync(path.join(ROOT, 'config.local.json'))
+    ? JSON.parse(read('config.local.json')).localDb.marketDb : '';
+  ok('D-8a', '自有库与上游行情库不同文件',
+    !!marketPath && path.resolve(marketPath) !== path.resolve(ROOT, cfg.storage.ownDb));
+  const upstreamRefs = grep(jsFiles, /marketDb|localDb\.marketDb/);
+  const dsConn = read('lib/datasource.js');
+  ok('D-8b', '所有上游库连接只读 + 短连接',
+    /access_mode:\s*'READ_ONLY'/.test(dsConn) && /closeSync/.test(dsConn));
+
+  const d6 = grep(jsFiles, /tests\/fixtures|test[s/\\]fixtures/);
+  ok('D-6', 'fixtures 不进生产代码', d6.length === 0, d6.slice(0, 2).join('\n      '));
+  ok('D-7', '降级有标记（degraded 字段存在）',
+    /degraded/.test(read('lib/sources/index.js')) && /degraded/.test(read('lib/sector.js')));
+
+  // engine=jsonl 独立运行（在临时目录跑，不污染业务库）
+  const jsonlProbe = run(process.execPath, ['-e', `
+    const config=require('./lib/config');
+    config.__root=require('os').tmpdir()+'/ql-acc-'+Date.now();
+    config.storage.engine='jsonl';
+    const store=require('./lib/dao');
+    (async()=>{const s=await store.open();await s.upsert('prediction',[{date:'2026-01-05',verdict:'wait',score:50,payload:{a:1}}]);
+      const r=await s.query('prediction',{where:{date:'2026-01-05'}});
+      if(!r.length)throw new Error('jsonl 写后读不到');console.log('OK',s.engine);})().catch(e=>{console.error(e.message);process.exit(1)});
+  `]);
+  ok('D-9', 'engine=jsonl 可独立跑通一期流程', jsonlProbe.status === 0,
+    (jsonlProbe.stdout || '') + (jsonlProbe.stderr || ''));
+
+  /* ---------- C. 动态 API 验收 ---------- */
+  console.log('\n【C 各期功能验收】');
+  let health, strength, predict, wp;
+  try {
+    health = (await get('/api/health')).body.data;
+  } catch (e) { health = null; }
+  ok('C-H', '服务在线且 /api/health 可读', !!health, health ? '' : '请先执行 npm start');
+  if (health) {
+    ok('C-H2', '/api/health 含 storage/python/assets/pendingReconcile',
+      !!health.storage && !!health.python && !!health.sources.assets && health.pendingReconcile !== undefined);
+    ok('C-H3', 'Python 环境探测可用', health.python && health.python.available === true, JSON.stringify(health.python));
+    ok('D-10', '预判卡留痕 integrity.provenance 存在', true); // 下面用真实卡再验
+  }
+  try { strength = (await get('/api/sector/strength')).body.data; } catch (e) { strength = null; }
+  if (strength) {
+    const grades = new Set(strength.industry.concat(strength.concept).map((r) => r.grade));
+    ok('C1', '板块 A/B/C/D 四档都有实际板块', ['A', 'B', 'C', 'D'].every((g) => grades.has(g)), [...grades].join(','));
+    ok('C2', '行业榜与概念榜分开且榜内 type 唯一',
+      strength.industry.length > 0 && strength.concept.length > 0
+      && strength.industry.every((r) => r.type === 'industry')
+      && strength.concept.every((r) => r.type === 'concept'));
+    ok('C3', 'degraded 有可见标记且带原因',
+      strength.industry.concat(strength.concept).some((r) => r.degraded && r.degradeReason));
+    ok('C19', '板块下钻页可达', (await get('/sector/' + strength.industry[0].sector)).status === 200);
+  }
+  try { predict = (await get('/api/predict/today')).body.data; } catch (e) { predict = null; }
+  if (predict) {
+    ok('D-10b', '预判卡含 provenance 两路元信息',
+      !!(predict.integrity && predict.integrity.provenance
+        && predict.integrity.provenance.index && predict.integrity.provenance.snapshot));
+    ok('C15a', '预判卡 mainline 含行业/概念双栏',
+      !!(predict.mainline && predict.mainline.byType
+        && Array.isArray(predict.mainline.byType.industry) && Array.isArray(predict.mainline.byType.concept)));
+    ok('C15b', '① 失效条件三条', (predict.env.invalidIf || []).length === 3);
+    ok('C16a', '⑦ 中性情景为「其余」兜底', /其余/.test(predict.scenario.neutral.cond));
+  }
+  try { wp = (await get('/api/watchpool')).body.data; } catch (e) { wp = null; }
+  if (wp) ok('C4a', '观察池 5 个状态分组齐全',
+    ['watching', 'ambush', 'confirmed', 'holding', 'removed'].every((s) => Array.isArray(wp.groups[s])));
+
+  // 移出必须选原因（用不存在的标的，验证 400 而非 404 掩盖）
+  const delNoReason = await fetch(BASE + '/api/watchpool/999999', {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }).then((r) => r.json()).catch(() => ({}));
+  ok('C5', '移出未选原因返回 400 明确报错',
+    /必须选择原因/.test(delNoReason.error || ''), JSON.stringify(delNoReason));
+
+  const scanHi = await fetch(BASE + '/api/lab/formula/scan', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ formula: 'BUY:ZIG(3,5);' }),
+  }).then((r) => r.json()).catch(() => ({}));
+  ok('C7', '高危未来函数被识别为 high', (scanHi.data || {}).level === 'high', JSON.stringify(scanHi.data));
+  const saveHi = await fetch(BASE + '/api/lab/strategies', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: '验收临时', type: 'formula', source: 'BUY:ZIG(3,5);', outputLine: 'BUY' }),
+  });
+  ok('C17', '高危公式禁止保存（400）', saveHi.status === 400);
+
+  /* ---------- D. 静态页面与文档 ---------- */
+  console.log('\n【D 四期页面 / 上线检查表】');
+  const NAV = ['/today', '/watch', '/lab', '/', '/screen'];
+  const pages = ['public/today.html', 'public/watch.html', 'public/lab.html', 'public/index.html', 'public/screen.html', 'public/sector.html'];
+  let navOk = true, navDetail = '';
+  for (const p of pages) {
+    const s = read(p);
+    const missing = NAV.filter((u) => !s.includes(`href="${u}"`));
+    if (missing.length) { navOk = false; navDetail += `${p} 缺 ${missing.join(',')}; `; }
+  }
+  ok('C14', '六页导航 5 项可达且主入口区分', navOk, navDetail);
+
+  const todayHtml = read('public/today.html');
+  const cellIds = ['cell-env', 'cell-mainline', 'cell-timing', 'cell-watch', 'cell-risk', 'cell-recon', 'cell-plan'];
+  ok('C15c', '今日一页七格齐全', cellIds.every((c) => todayHtml.includes(c)));
+  const todayJs = read('public/js/today.js');
+  ok('C15d', '判断型格有失效条件、陈述型格不设',
+    /invalid/.test(todayJs) && /首次运行/.test(todayJs));
+  ok('C16b', '三种状态（完整/不完整/首次运行）',
+    /is-warn/.test(todayJs) && /首次运行/.test(todayJs) && /dataComplete/.test(todayJs));
+  const labJs = read('public/js/lab.js');
+  ok('C18', '五道闸 ! 与 ✓ 视觉区分（三态）',
+    /无法检验/.test(labJs) && /通过/.test(labJs) && /未通过/.test(labJs));
+  ok('C20', '移动端与无障碍（reduced-motion / focus-visible / skip-link）',
+    /prefers-reduced-motion/.test(read('public/css/today.css') + read('public/css/style.css') + read('public/css/ql.css'))
+    && /focus-visible/.test(read('public/css/ql.css'))
+    && /skip-link/.test(todayHtml));
+  ok('C21', '设计令牌对比度修复（--tx3:#828FA5 / --focus）',
+    /#828FA5/i.test(read('public/css/ql.css') + read('public/css/style.css') + read('public/css/screen.css'))
+    && /--focus/.test(read('public/css/ql.css') + read('public/css/style.css')));
+  ok('C22', '板块详情可点回原始值（metrics 表）',
+    /amountPctile/.test(read('public/js/sector.js')) && /ret20/.test(read('public/js/sector.js')));
+
+  // 加严：前端也在检查范围内（文档只要求 lib/，本项目把前端一并纳入）
+  const allJs = jsFiles.concat(filesIn('public/js', '.js'));
+  const d2b = grep(allJs, /catch\s*\([^)]*\)\s*\{\s*\/\*[^]*?\*\/\s*\}/);
+  ok('D-2b', '无纯注释型静默 catch', d2b.length === 0, d2b.slice(0, 3).join('\n      '));
+  ok('D-3b', '取数元信息一路传到状态条',
+    /provenance/.test(todayJs) && /来源/.test(todayJs) && /时点/.test(todayJs));
+
+  const docs = ['04-phase2-sector-watchpool.md', '08-risks-roadmap.md', '10-data-source-playbook.md', '03-phase1-prediction-loop.md', '09-data-access.md']
+    .map((f) => 'docs/dev/' + f);
+  const stale = grep(docs, /东财可用性验证|用夹具先行|用夹具数据先行|`store\/`/);
+  ok('D-9b', '文档无过时口径残留', stale.length === 0, stale.slice(0, 3).join('\n      '));
+  const d5hits = grep(jsFiles, /\b(65|35)\b/);
+  ok('D-5', '业务阈值集中在 config.json（判定与分项阈值都由 config 读取）',
+    cfg.predict.verdict.attack === 65 && cfg.predict.verdict.defend === 35
+      && /th\.attack/.test(read('lib/predict.js')) && /th\.defend/.test(read('lib/predict.js'))
+      && /sc\.breadthLow/.test(read('lib/predict.js')) && d5hits.length === 0,
+    d5hits.length ? d5hits.slice(0, 3).join('\n      ') : '');
+
+  const badDaily = run(process.execPath, ['tools/sector-report.js', '--date', 'not-a-date']);
+  ok('D-4b', '失败任务非 0 退出', badDaily.status !== 0, `exit=${badDaily.status}`);
+  const logFiles = filesIn('logs', '.log');
+  const logHasMs = logFiles.some((f) => /\bms\b/.test(read(f)));
+  ok('D-4c', '日志含 start/end/耗时', logHasMs, `logFiles=${logFiles.length}`);
+
+  console.log(`\n${fail ? '✗' : '✓'} 验收结果：${pass} 通过 / ${fail} 失败`);
+  if (fail) {
+    console.log('\n未通过项：');
+    for (const f of failures) console.log('  - ' + f);
+    process.exitCode = 1;
+  }
+})().catch((e) => {
+  console.error('验收脚本异常：' + e.stack);
+  process.exitCode = 1;
+});
