@@ -94,6 +94,18 @@ global.fetch = (path, opt) => nativeFetch(BASE + path, opt);
     assert.ok(/进攻|观望|防守/.test(t), `status-text=${t}`);
   });
 
+  check('状态条显示数据来源与时点（D4 留痕一路传到 UI）', () => {
+    const t = get('status-side').textContent;
+    assert.ok(t.includes('来源'), '缺少来源标记：' + t);
+    assert.ok(t.includes('时点'), '缺少时点标记：' + t);
+    const prov = pred.integrity && pred.integrity.provenance;
+    if (prov) {
+      assert.ok(/时点 \d{4}-\d{2}-\d{2}/.test(t), '时点不是真实日期：' + t);
+      const srcs = [prov.index && prov.index.source, prov.snapshot && prov.snapshot.source].filter(Boolean);
+      if (srcs.length) assert.ok(t.includes(srcs[0]), '来源未落到状态条：' + t);
+    }
+  });
+
   check('① 徽标为三态之一', () => {
     assert.ok(/进攻|观望|防守/.test(get('env-chip').textContent), get('env-chip').textContent);
   });

@@ -252,6 +252,29 @@ if (bars[bars.length - 1].d < todayStr()) {
 
 **这些字段要一路传到 UI**：今日一页的状态条要能显示「数据来源」与「数据时点」。
 
+### 6.1 一期落点（实现对照）
+
+`tools/daily-close.js` 在生成预判卡时把两路取数元信息写入 `payload.integrity.provenance`：
+
+```jsonc
+{
+  "index":    { "source", "level", "asOf", "stale", "degraded", "degradeReason" },
+  "snapshot": { "source", "level", "asOf", "stale", "degraded", "count" },
+  "fetchedAt": "ISO8601"
+}
+```
+
+`public/js/today.js` 读它渲染状态条。两路**分开保留、不许合并成一个值**，否则其中一路降级会被另一路掩盖。拿不到就显示「来源未记录／时点未记录」，绝不编造（D1）。
+
+**两个 `stale` 的口径不同，不可混用**：
+
+| 字段 | 含义 | 谁来消费 |
+|---|---|---|
+| `provenance.index.stale` | 指数 K 线是否**落后于请求的交易日**（数据缺根，是真缺陷） | `integrity.stale` → 触发 `warnings` → `dataComplete=false` |
+| `provenance.snapshot.stale` | 快照 `asOf` 是否**不等于自然日今天**（周末／盘前必然为 true） | 仅状态条做时效提示，**不判成依据不完整** |
+
+周末、盘前展示最近交易日收盘数据是正确行为，不是 D3 违规；只要把时点说清楚即可。真正违规的是「当日有行情却拿 T-1 冒充当日」，由 D3 + 验收 D-4 拦截。
+
 ---
 
 ## 7. 存储层：按写入方分离

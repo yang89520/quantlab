@@ -223,6 +223,7 @@ node tools/daily-close.js --date <历史某日>   # 补跑一天，验证幂等�
 | D-7 | 降级有标记 | 关掉本地库 → 断言 `degraded === true` |
 | D-8 | 不写上游库 | 静态检查所有 market.db 连接均带 `readOnly:true`；断言 `ownDb !== marketDb` |
 | D-9 | 自有库可独立运行 | `engine=jsonl` 跑完整一期流程不报错 |
+| D-10 | 留痕一路到 UI | 断言预判卡含 `integrity.provenance.index/snapshot`；`npm run test:today` 断言状态条含「来源」「时点」及真实日期 |
 
 **D-4 是最重要的一条**：它防的是"拿 T-1 本地数据冒充当日"——这种假数据看起来完全正常，最难发现。
 

@@ -32,6 +32,13 @@
 
   /* ---------------- 顶部状态条 ---------------- */
 
+  // 本地自然日；不用 toISOString（UTC 会在凌晨差一天）
+  const localDateStr = () => {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+
   function renderStatus(ctx) {
     const bar = $('statusbar');
     const txt = $('status-text');
@@ -47,7 +54,18 @@
     const sideBits = [];
     if (incomplete) sideBits.push('依据不完整');
     else sideBits.push('数据完整');
-    if (ctx.stale) sideBits.push('数据为上一交易日收盘');
+
+    // D4（09 §6）：两路取数元信息原样显示，拿不到就明说"未记录"，绝不编造
+    const prov = ctx.provenance || {};
+    const ix = prov.index || {};
+    const sp = prov.snapshot || {};
+    const sources = [ix.source, sp.source].filter(Boolean);
+    const asOf = sp.asOf || ix.asOf || null;
+    sideBits.push(sources.length ? `来源 ${sources.join(' / ')}` : '来源未记录');
+    sideBits.push(asOf ? `时点 ${asOf}` : '时点未记录');
+    // 周末/盘前展示最近交易日收盘是正确行为，只做时效提示，不判成"依据不完整"
+    if (asOf && asOf !== localDateStr()) sideBits.push('非当日收盘数据');
+    if (ctx.stale) sideBits.push('指数K线未补齐至交易日');
     if (ctx.pending) sideBits.push(`待对账 ${ctx.pending}`);
     side.textContent = sideBits.join(' · ');
   }
@@ -284,11 +302,12 @@
       score: pred.env.score,
       incomplete,
       stale,
+      provenance: pred.integrity && pred.integrity.provenance,
       pending: health && health.pendingReconcile,
     });
 
     $('page-sub').textContent = `预判日 ${pred.date} → 目标日 ${pred.targetDate}｜`
-      + `数据源 ${(pred.integrity && pred.integrity.snapshotCount) || 0} 只标的`;
+      + `快照 ${(pred.integrity && pred.integrity.snapshotCount) || 0} 只标的`;
 
     if (incomplete) {
       cells.forEach((c) => {

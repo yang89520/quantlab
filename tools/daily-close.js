@@ -134,6 +134,31 @@ async function main() {
 
   // ---- 5. 生成今日预判 ----
   const existing = await st.query('prediction', { where: { date } });
+
+  // D4（docs/dev/09 §4/§6）：取数元信息必须一路传到 UI，不许在编排层丢掉。
+  // 指数 K 线与全市场快照是两次独立取数，各自保留 source/level/asOf/stale/degraded，
+  // 不合并成一个"看起来干净"的值——合并会掩盖其中一路已经降级。
+  const provenance = {
+    index: {
+      source: idx.source || null,
+      level: idx.level || null,
+      asOf: idx.asOf || null,
+      stale: !!idx.stale,
+      degraded: !!idx.degraded,
+      degradeReason: idx.missing && idx.missing.length ? idx.missing.join(',') : null,
+    },
+    snapshot: {
+      source: (snapRec && snapRec.source) || null,
+      level: (snapRec && snapRec.level) || null,
+      asOf: (snapRec && snapRec.asOf) || date,   // --skip-fetch 时用已有快照的交易日
+      stale: !!(snapRec && snapRec.stale),
+      degraded: !!(snapRec && snapRec.complete === false),
+      count: summary.count,
+    },
+    fetchedAt: new Date().toISOString(),
+  };
+  log.info('daily-close.provenance', provenance);
+
   const payload = predict.build({
     date,
     targetDate: predict.nextTradingDay(date),
@@ -145,6 +170,7 @@ async function main() {
       bars: idx.rows.length,
       lastBarDate: idx.asOf,
       stale: !!idx.stale,
+      provenance,
       warnings: [],
     },
   });
