@@ -230,7 +230,8 @@ function get(port, p, timeout) {
       res.on('end', () => {
         const buf = Buffer.concat(chunks);
         let json = null;
-        try { json = JSON.parse(buf.toString('utf8')); } catch (e) { /* 非 JSON 走原始 */ }
+        // 非 JSON 响应是预期情况（如静态资源），body 原样交给断言处理
+        try { json = JSON.parse(buf.toString('utf8')); } catch (e) { json = null; }
         resolve({ status: res.statusCode, headers: res.headers, body: buf.toString('utf8'), json });
       });
     });
@@ -258,7 +259,10 @@ async function apiGroup() {
   child.stdout.on('data', (d) => { log += d; });
   child.stderr.on('data', (d) => { log += d; });
 
-  const cleanup = () => { try { child.kill('SIGKILL'); } catch (e) { /* ignore */ } };
+  const cleanup = () => {
+    try { child.kill('SIGKILL'); }
+    catch (e) { process.stderr.write('[smoke] 子进程清理：' + e.message + '\n'); }
+  };
 
   try {
     const up = await waitUp(port, 10000);
