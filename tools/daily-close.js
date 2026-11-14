@@ -20,6 +20,12 @@ const snapLib = require('../lib/snapshot');
 const predict = require('../lib/predict');
 const { reconcile } = require('../lib/reconcile');
 const watchStore = require('../lib/store');
+const sectordata = require('../lib/sectordata');
+const watchpool = require('../lib/watchpool');
+const localdb = require('../lib/sources/adapters/local-db');
+const track = require('../lib/track');
+const strategies = require('../lib/strategy');
+const gatesLib = require('../lib/gates');
 
 function arg(name, def) {
   const i = process.argv.indexOf('--' + name);
@@ -79,7 +85,30 @@ async function main() {
     date, count: summary.count, breadth: summary.breadth, zt: summary.ztCount,
   });
 
-  // ---- 4. 对账（先于预判） ----
+  // ---- 4. 板块强度（二期，必须早于对账与预判） ----
+  // 对账的 direction 要用「目标日板块榜」判断昨日 A 档是否仍在前 30%，
+  // 预判的 mainline 也要用同一批榜单；所以这一步排在对账之前。
+  // 04 §6 把板块排在对账之后，会导致 direction 拿不到当日榜单，此处按数据依赖修正。
+  let strengthRows = [];
+  if (has('skip-sector')) {
+    strengthRows = await sectordata.readStrength(date, null, { readOnly: true });
+    log.info('daily-close.sector_skipped', { date, rows: strengthRows.length });
+  } else {
+    try {
+      const sr = await sectordata.capture({ date });
+      strengthRows = sr.rows;
+      log.info('daily-close.sector', {
+        date, rows: strengthRows.length, insufficient: sr.insufficient.length,
+        provenance: sr.provenance,
+      });
+    } catch (e) {
+      // 板块是增强维度，失败不阻断一期闭环；明确降级，不编造榜单
+      log.warn('daily-close.sector_failed', { date, error: e.message });
+      strengthRows = [];
+    }
+  }
+
+  // ---- 5. 对账（先于预判） ----
   // 找出所有「目标日 <= 今天 且 尚未对账」的预判，逐条对账
   const recentPreds = await st.query('prediction', { order: 'date', desc: true, limit: 10 });
   let reconciled = 0;
@@ -97,7 +126,7 @@ async function main() {
     pendingCount++;
     const prevMap = await snapLib.readMap(p.date);
     const bars = idx.rows.filter((r) => String(r[0]).slice(0, 10) <= target);
-    const result = reconcile(payload, prevMap, summary, bars);
+    const result = reconcile(payload, prevMap, summary, bars, config, { sectorsToday: strengthRows });
 
     await st.upsert('reconcile', [{
       date: p.date,
@@ -132,7 +161,7 @@ async function main() {
   }
   if (!pendingCount) log.info('daily-close.reconcile_none', { note: '没有到期的待对账预判（首次运行属正常）' });
 
-  // ---- 5. 生成今日预判 ----
+  // ---- 6. 生成今日预判 ----
   const existing = await st.query('prediction', { where: { date } });
 
   // D4（docs/dev/09 §4/§6）：取数元信息必须一路传到 UI，不许在编排层丢掉。
@@ -165,6 +194,7 @@ async function main() {
     bars: idx.rows,
     snap: summary,
     candidates: await collectCandidates(),
+    strengthRows,
     integrity: {
       snapshotCount: summary.count,
       bars: idx.rows.length,
@@ -194,11 +224,60 @@ async function main() {
     overwritten: existing.length > 0,
   });
 
-  // ---- 6. 摘要 ----
+  // ---- 7. 观察池状态机推进（二期） ----
+  // 每只标的用自己的 K 线；上游库不可读时不判定、不共用假数据。
+  const activePool = watchpool.list().filter((e) => e.state !== 'removed');
+  let poolResult = { total: 0, active: 0, moved: 0 };
+  if (activePool.length) {
+    let klines = {};
+    try {
+      klines = await localdb.readMemberKlines(activePool.map((e) => e.code), 30);
+    } catch (e) {
+      log.warn('daily-close.pool_klines_failed', { error: e.message });
+    }
+    const gradeOf = (sector) => {
+      const r = strengthRows.find((x) => x.sector === sector);
+      return r ? r.grade : null;
+    };
+    poolResult = await watchpool.advanceAll({
+      date,
+      sessionDates: idx.rows.map((r) => String(r[0]).slice(0, 10)),
+      barsOf: (code) => klines[String(code)] || [],
+      sectorGradeOf: gradeOf,
+      stockScore: null,   // 综合评分由前端 composite 计算后随入池提交，后端不另造一套
+    });
+    log.info('daily-close.watchpool', poolResult);
+  }
+  const pruned = await watchpool.prune(date);
+  if (pruned.removed) log.info('daily-close.watchpool_pruned', pruned);
+
+  // ---- 9. 信号跟踪回填（幂等补漏）+ 策略自动降级 ----
+  const sess = idx.rows.map((r) => String(r[0]).slice(0, 10));
+  const bf = await track.backfill(date, sess);
+  let degraded = 0;
+  for (const s of strategies.list().filter((x) => x.status === 'active')) {
+    const w = await track.winRate(s.id, { readOnly: true });
+    const bt = s.params && s.params.backtestWinRate;
+    if (w.sample >= config.gates.checkEveryDays && w.liveWinRate != null && bt != null
+        && gatesLib.shouldDegrade(w.liveWinRate, bt)) {
+      await strategies.setStatus(s.id, 'suspect');
+      degraded++;
+      log.warn('daily-close.strategy_degraded', {
+        id: s.id, live: w.liveWinRate, backtest: bt, gap: config.gates.degradeGap,
+      });
+    }
+  }
+  log.info('daily-close.track', { filled: bf.filled, noData: bf.noData, degraded });
+
+  // ---- 10. 摘要 ----
   console.log('');
   console.log(`日期 ${date} → 目标 ${payload.targetDate}｜${payload.env.verdict} ${payload.env.score} 分`
     + `（趋势 ${payload.env.parts.trend} + 宽度 ${payload.env.parts.breadth} + 量能 ${payload.env.parts.vol}）`);
   console.log(`快照 ${summary.count} 只｜宽度 ${(summary.breadth * 100).toFixed(1)}%｜涨停 ${summary.ztCount}｜候选 ${payload.candidates.length} 只`);
+  console.log(`板块 ${strengthRows.length} 个｜A 档 ${strengthRows.filter((r) => r.grade === 'A').length} 个`
+    + `｜降级 ${strengthRows.filter((r) => r.degraded).length} 个`
+    + `｜主线 ${payload.mainline ? payload.mainline.sectors.length : 0} 个`);
+  console.log(`观察池 ${poolResult.active} 只在池｜迁移 ${poolResult.moved} 次｜信号回填 ${bf.filled} 条｜降级 ${degraded} 个策略`);
   console.log(`对账 ${reconciled ? '已完成 1 条' : '无待办'}｜总耗时 ${Date.now() - t0}ms`);
 }
 
