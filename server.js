@@ -50,7 +50,16 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 /* ---------------- 统一响应 ---------------- */
-const ok = (res, data) => res.json({ ok: true, data });
+// DuckDB 的 COUNT / TIMESTAMP 这类列会以 BigInt 返回，而 Express 的 res.json 内部是裸
+// JSON.stringify —— 碰到 BigInt 直接抛 "Do not know how to serialize a BigInt"，
+// 接口变成 500 且看不出原因（health 就这么挂过一次）。在响应层统一兜住，不要每个接口各写一遍。
+function bigintReplacer(k, v) {
+  if (typeof v !== 'bigint') return v;
+  return v <= Number.MAX_SAFE_INTEGER && v >= Number.MIN_SAFE_INTEGER ? Number(v) : v.toString();
+}
+const ok = (res, data) => res.type('application/json').send(
+  JSON.stringify({ ok: true, data }, bigintReplacer),
+);
 function fail(res, e) {
   const code = e && e.code && Number.isInteger(e.code) ? e.code : 500;
   if (code >= 500) console.error('[api]', e);
@@ -530,7 +539,29 @@ app.get('/api/watchpool', async (req, res) => {
 /** 迁移历史（放在 /:code 路由之前，避免被当成 code） */
 app.get('/api/watchpool/transitions', async (req, res) => {
   try {
-    ok(res, { code: req.query.code || null, list: watchpool.transitions(req.query.code) });
+    const code = req.query.code || null;
+    const date = req.query.date ? String(req.query.date).slice(0, 10) : null;
+    let list = watchpool.transitions(code);
+    // date 过滤按 id 里的交易日（tr_YYYYMMDD_...），不受 cron 时区影响
+    if (date) list = list.filter((t) => String(t.id || '').slice(3, 11) === date.replace(/-/g, ''));
+    ok(res, { code, date, list });
+  } catch (e) { fail(res, e); }
+});
+
+/** 持仓风险扫描（06 §2.3 ⑤：只报事实，不设失效条件） */
+app.get('/api/watchpool/risk', async (req, res) => {
+  try {
+    const date = req.query.date
+      ? String(req.query.date).slice(0, 10)
+      : (await ds.latestTradingDay()).date;
+    const r = await watchpool.riskScan({ date });
+    let prev = null;
+    try {
+      prev = await watchpool.prevRisk(date);
+    } catch (e) {
+      log.warn('watchpool.prev_risk_failed', { error: e.message });
+    }
+    ok(res, Object.assign({}, r, { prev: prev ? { date: prev.date, ...prev.v } : null }));
   } catch (e) { fail(res, e); }
 });
 
@@ -539,17 +570,32 @@ app.post('/api/watchpool', async (req, res) => {
   try {
     const b = req.body || {};
     const date = b.date || (await ds.latestTradingDay()).date;
+    let sector = b.sector || null;
     let grade = null;
-    if (b.sector) {
+    let candidates = [];
+    if (sector) {
       const rows = await sectordata.readStrength(date, null, { readOnly: true });
-      const s = rows.find((r) => r.sector === b.sector);
+      const s = rows.find((r) => r.sector === sector);
       grade = s ? s.grade : null;
+    } else if (b.code) {
+      // 前端没指定板块 → 后端按当日成分反查，取档位最强的那个
+      candidates = await sectordata.sectorsOfCode(date, b.code);
+      if (candidates.length) {
+        sector = candidates[0].sector;
+        grade = candidates[0].grade;
+      }
+    }
+    if (!sector) {
+      return res.status(400).json({
+        ok: false,
+        error: `未找到 ${b.code || ''} 当日所属板块（成分数据缺失），无法判定 A/B 档，拒绝入池`,
+      });
     }
     const entry = await watchpool.add({
-      code: b.code, name: b.name, sector: b.sector, grade,
+      code: b.code, name: b.name, sector, grade,
       score: b.score, entryReason: b.entryReason, date,
     });
-    ok(res, entry);
+    ok(res, Object.assign({}, entry, { sectorCandidates: candidates.slice(0, 3) }));
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
@@ -579,6 +625,31 @@ app.delete('/api/watchpool/:code', async (req, res) => {
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message });
   }
+});
+
+/* ============================================================
+   页面用配置投影（阈值来自 config.json，前端不许写死数字）
+   ============================================================ */
+app.get('/api/ui/config', (req, res) => {
+  try {
+    const ui = config.ui || {};
+    const strip = (o) => {
+      const out = {};
+      for (const [k, v] of Object.entries(o || {})) if (!k.startsWith('_')) out[k] = v;
+      return out;
+    };
+    ok(res, {
+      timing: strip(ui.timing),
+      candidate: strip(ui.candidate),
+      risk: strip(ui.risk),
+      watchpool: {
+        maxSize: config.watchpool.maxSize,
+        minScore: config.watchpool.minScore,
+        maxStay: config.watchpool.maxStay,
+      },
+      gates: { trackDays: config.gates.trackDays },
+    });
+  } catch (e) { fail(res, e); }
 });
 
 /* ============================================================
@@ -709,13 +780,45 @@ app.get('/api/health', async (req, res) => {
     const storeInfo = await storeDao.info({ readOnly: true });
     const dsHealth = await ds.health();
     let pending = 0;
+    // 最近一次预判：cron 漏跑时这里会停在旧日期，比 pendingReconcile 更早暴露问题（03 §8）
+    let lastPrediction = null;
     try {
       const st = await storeDao.open({ readOnly: true });
       const preds = await st.query('prediction', { order: 'date', desc: true, limit: 30 });
       const recs = await st.query('reconcile', { order: 'date', desc: true, limit: 30 });
       const done = new Set(recs.map((r) => r.date));
       pending = preds.filter((p) => !done.has(p.date)).length;
-    } catch (e) { /* 读不到就报 null，不编 0 */ pending = null; }
+      if (preds.length) {
+        const p = preds[0];
+        // DuckDB 的 TIMESTAMP 不是 JS Date（是 { micros: BigInt } 这类对象），
+        // 直接透传会让前端拿到 {"micros":...}，这里统一折成 ISO 字符串。
+        const plain = (v) => {
+          if (v === null || v === undefined) return null;
+          if (typeof v === 'bigint') return Number(v);
+          if (v instanceof Date) return v.toISOString();
+          if (typeof v === 'object' && typeof v.micros === 'bigint') {
+            return new Date(Number(v.micros / 1000n)).toISOString();
+          }
+          if (typeof v === 'object' && typeof v.micros === 'number') {
+            return new Date(v.micros / 1000).toISOString();
+          }
+          return v;
+        };
+        lastPrediction = {
+          date: plain(p.date),
+          targetDate: plain(p.target_date !== undefined ? p.target_date : p.targetDate),
+          verdict: plain(p.verdict),
+          score: plain(p.score),
+          dataComplete: p.data_complete === undefined ? null : !!p.data_complete,
+          createdAt: plain(p.created_at !== undefined ? p.created_at : p.createdAt),
+        };
+      }
+    } catch (e) {
+      // 读不到就报 null，不编 0（D1）
+      log.warn('health.pending_reconcile_failed', { error: e.message });
+      pending = null;
+      lastPrediction = null;
+    }
 
     ok(res, {
       version: pkg.version,
@@ -724,6 +827,9 @@ app.get('/api/health', async (req, res) => {
       sources: Object.assign({}, dsHealth, { assets: sourceHub.snapshot() }),
       python: await pythonHealth(),
       pendingReconcile: pending,
+      lastPrediction,
+      // 五道闸异步队列（05 §8）：running/queued 持续不降说明卡住了
+      gates: lab.gatesQueue(),
       uptimeSec: Math.round(process.uptime()),
     });
   } catch (e) { fail(res, e); }
