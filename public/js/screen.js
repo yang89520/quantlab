@@ -256,7 +256,7 @@
     try {
       const c = await api('/api/screen/shape/coverage?pool=' + encodeURIComponent(S.pool));
       if (c.total && c.covered >= c.total * 0.6) await scanPool({ quiet: true });
-    } catch (e) { /* 取不到覆盖率就让用户手动点扫描 */ }
+    } catch (e) { console.warn('[screen] 覆盖率读取失败，请手动点扫描', e); }
   }
 
   function updateScanInfo() {

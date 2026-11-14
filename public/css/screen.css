@@ -235,3 +235,52 @@ body.pnl-open .sc-fab{opacity:0;pointer-events:none}
   .sc-tbl tbody td.c-name .nm{max-width:96px}
   .sc-tbl thead th,.sc-tbl tbody td{padding:8px 7px}
 }
+
+/* ============================================================
+ * 四期 · 统一主导航 + 前端审查无障碍修复（选股器页）
+ * 依据 docs/frontend-audit-and-design-spec.md；仅追加/覆盖
+ * ============================================================ */
+
+/* 1. 设计令牌：修 --tx3 / --blue 对比度，新增 --focus / --tx-disabled */
+:root{
+  --tx3:#828FA5;
+  --blue:#6BA5FF;
+  --focus:#8FBDFF;
+  --tx-disabled:#5A6478;
+}
+
+/* 2. 焦点可见：全站统一焦点环；
+      并为原 .row2 input:focus / .row1 select:focus 的 outline:none 补等效替代（修 A1） */
+*:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.row2 input:focus-visible,.row1 select:focus-visible{
+  outline:2px solid var(--focus);outline-offset:2px;
+}
+
+/* 3. 屏幕阅读器专用文本（clip 方案） */
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+
+/* 4. 跳转到主要内容：默认移出视口，聚焦时显示 */
+.skip-link{
+  position:absolute;left:-9999px;top:0;z-index:300;
+  padding:12px 20px;border-radius:0 0 12px 0;
+  background:var(--card2);color:var(--tx);border:1px solid var(--focus);
+  font-size:13px;font-weight:600;text-decoration:none;
+}
+.skip-link:focus{left:0}
+
+/* 5. 尊重系统「减少动效」偏好 */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;
+    transition-duration:.01ms!important;
+    scroll-behavior:auto!important;
+  }
+}
+
+/* 6. 字号下限：消除 9–10.5px 小字，正文最小 12px；11px 仅徽标 */
+.grp-t,.scan-info,.hint,.sc-tbl thead th,
+.sc-tbl tbody td.c-name .cd,.tag,
+.sc-tbl thead th.on::after{font-size:12px}

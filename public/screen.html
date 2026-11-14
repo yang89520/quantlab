@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/css/screen.css">
 </head>
 <body class="sc-page">
+<a class="skip-link" href="#main">跳到主要内容</a>
 
 <header>
   <div class="hd sc-hd">
@@ -27,7 +28,13 @@
     <div class="hd-right">
       <div class="metric"><div class="k">池内</div><div class="v" id="allN">—</div></div>
       <div class="metric"><div class="k">命中</div><div class="v" id="hitN">—</div></div>
-      <a class="btn-ghost" href="/">← 分析台</a>
+      <nav class="main-nav" aria-label="主导航">
+        <a href="/today">今日一页</a>
+        <a href="/watch">观察池</a>
+        <a href="/lab">策略实验室</a>
+        <a href="/" class="tool">分析台</a>
+        <a href="/screen" class="tool" aria-current="page">选股器</a>
+      </nav>
       <button class="btn" id="btnReload">刷新</button>
     </div>
   </div>
@@ -157,7 +164,7 @@
   <div class="sc-mask" id="scMask"></div>
 
   <!-- 结果区 -->
-  <main class="sc-main">
+  <main class="sc-main" id="main" tabindex="-1">
     <div class="sc-toolbar">
       <div class="tb-left">
         <span class="tb-hit"><b id="tbHit">—</b> 只命中</span>

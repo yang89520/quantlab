@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/css/watchlist.css">
 </head>
 <body>
+<a class="skip-link" href="#main">跳到主要内容</a>
 <header>
   <div class="hd">
     <div class="brand">
@@ -28,15 +29,13 @@
     </div>
 
     <div class="hd-right">
-      <a class="nav-screen" href="/today" title="今日一页（七格决策总览）" style="margin-right:8px">
-        今日一页
-      </a>
-      <a class="nav-screen" href="/screen.html" title="全市场选股（真实行情 + 40 流派精算）">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M2 3h12M4.5 8h7M7 13h2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
-        选股
-      </a>
+      <nav class="main-nav" aria-label="主导航">
+        <a href="/today">今日一页</a>
+        <a href="/watch">观察池</a>
+        <a href="/lab">策略实验室</a>
+        <a href="/" class="tool" aria-current="page">分析台</a>
+        <a href="/screen" class="tool">选股器</a>
+      </nav>
       <div class="metric"><div class="k">年内振幅</div><div class="v" id="mAmp">—</div></div>
       <div class="metric"><div class="k" id="mTurnK">换手率</div><div class="v" id="mTurn">—</div></div>
       <div class="metric"><div class="k" id="mCapK">流通市值</div><div class="v" id="mCap">—</div></div>
@@ -59,7 +58,7 @@
   </div>
 </header>
 
-<main>
+<main id="main" tabindex="-1">
   <section class="sidebar" id="sidebar">
     <div class="sb-hd">
       <button class="sb-fold" id="sbFold" aria-label="展开或收起自选股" aria-expanded="true">⌄</button>

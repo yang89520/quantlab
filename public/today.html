@@ -9,7 +9,7 @@
 </head>
 <body>
 
-<a class="skip" href="#main">跳到主内容</a>
+<a class="skip skip-link" href="#main">跳到主内容</a>
 
 <header>
   <div class="hd">
@@ -78,57 +78,114 @@
       <p class="banner" id="recon-banner" role="status"></p>
       <div class="real-body" id="recon-body">
         <p class="verdict" id="recon-verdict">—<span class="sub" id="recon-sub"></span></p>
+        <p class="sample-note" id="recon-sample" role="status" hidden></p>
         <table class="cmp" id="recon-table" hidden>
           <caption class="sr-only">昨日预判与今日实际对照</caption>
           <tbody id="recon-tbody"></tbody>
         </table>
         <div class="hits" id="recon-hits"></div>
+        <p class="attr-legend" id="recon-attr"></p>
         <p class="delta" id="recon-delta"></p>
       </div>
       <div class="nodata-body">需一期数据（对账结果）</div>
     </section>
 
-    <!-- ② 主线（依赖二期） -->
+    <!-- ② 主线（判断型 · 依赖二期） -->
     <section class="cell cell--mainline nodata" id="cell-mainline" aria-labelledby="h-main">
       <div class="cell-hd">
         <span class="idx" aria-hidden="true">②</span>
         <h2 id="h-main">主线</h2>
-        <span class="chip chip-none">未上线</span>
+        <span class="chip chip-none" id="chip-main">未上线</span>
+        <button type="button" class="fold-toggle" id="fold-btn-mainline" aria-controls="fold-mainline" aria-expanded="true">收起</button>
       </div>
-      <div class="real-body"></div>
+      <p class="banner" id="main-banner" role="status"></p>
+      <div class="real-body">
+        <p class="verdict" id="main-verdict">—<span class="sub" id="main-sub"></span></p>
+        <div class="fold-body" id="fold-mainline">
+          <div class="evid">
+            <h3 class="sect-h">依据 · A 档前 3（点板块名看详情）</h3>
+            <div class="boards" id="main-boards"></div>
+          </div>
+          <p class="footnote" id="main-footnote" hidden></p>
+          <div class="invalid" id="main-invalid" hidden>
+            <h3 class="sect-h">失效条件</h3>
+            <ul id="main-invalid-list"></ul>
+          </div>
+          <p class="delta" id="main-delta"></p>
+        </div>
+      </div>
       <div class="nodata-body">需二期功能（板块强度）</div>
     </section>
 
-    <!-- ③ 时机（依赖三期） -->
-    <section class="cell cell--timing nodata" id="cell-timing" aria-labelledby="h-timing">
+    <!-- ③ 时机（判断型 · 依赖三期） -->
+    <section class="cell cell--timing nodata is-collapsed" id="cell-timing" aria-labelledby="h-timing">
       <div class="cell-hd">
         <span class="idx" aria-hidden="true">③</span>
         <h2 id="h-timing">时机</h2>
-        <span class="chip chip-none">未上线</span>
+        <span class="chip chip-none" id="chip-timing">未上线</span>
+        <button type="button" class="fold-toggle" id="fold-btn-timing" aria-controls="fold-timing" aria-expanded="false">展开</button>
       </div>
-      <div class="real-body"></div>
+      <p class="banner" id="timing-banner" role="status"></p>
+      <div class="real-body">
+        <p class="verdict" id="timing-verdict">—<span class="sub" id="timing-sub"></span></p>
+        <div class="fold-body" id="fold-timing">
+          <div class="evid">
+            <h3 class="sect-h">依据 · 观察池四态（点状态看明细）</h3>
+            <ul id="timing-evid"></ul>
+          </div>
+          <div class="invalid" id="timing-invalid" hidden>
+            <h3 class="sect-h">失效条件</h3>
+            <ul id="timing-invalid-list"></ul>
+          </div>
+          <p class="delta" id="timing-delta"></p>
+        </div>
+      </div>
       <div class="nodata-body">需三期功能（策略实验室）</div>
     </section>
 
-    <!-- ④ 候选（依赖二期） -->
-    <section class="cell cell--watch nodata" id="cell-watch" aria-labelledby="h-watch">
+    <!-- ④ 候选（判断型 · 依赖二期） -->
+    <section class="cell cell--watch nodata is-collapsed" id="cell-watch" aria-labelledby="h-watch">
       <div class="cell-hd">
         <span class="idx" aria-hidden="true">④</span>
         <h2 id="h-watch">候选</h2>
-        <span class="chip chip-none">未上线</span>
+        <span class="chip chip-none" id="chip-watch">未上线</span>
+        <button type="button" class="fold-toggle" id="fold-btn-watch" aria-controls="fold-watch" aria-expanded="false">展开</button>
       </div>
-      <div class="real-body"></div>
+      <p class="banner" id="watch-banner" role="status"></p>
+      <div class="real-body">
+        <p class="verdict" id="watch-verdict">—<span class="sub" id="watch-sub"></span></p>
+        <div class="fold-body" id="fold-watch">
+          <ul class="cand-list" id="watch-list"></ul>
+          <div class="evid">
+            <h3 class="sect-h">依据 · 当日快照（/api/snapshot/summary）</h3>
+            <ul id="watch-evid"></ul>
+          </div>
+          <div class="invalid" id="watch-invalid" hidden>
+            <h3 class="sect-h">失效条件</h3>
+            <ul id="watch-invalid-list"></ul>
+          </div>
+          <p class="delta" id="watch-delta"></p>
+        </div>
+      </div>
       <div class="nodata-body">需二期功能（观察池）</div>
     </section>
 
-    <!-- ⑤ 风险（需持仓数据） -->
+    <!-- ⑤ 风险（陈述型 · 不设失效条件） -->
     <section class="cell cell--risk nodata" id="cell-risk" aria-labelledby="h-risk">
       <div class="cell-hd">
         <span class="idx" aria-hidden="true">⑤</span>
         <h2 id="h-risk">风险</h2>
-        <span class="chip chip-fact">待接入</span>
+        <span class="chip chip-fact" id="chip-risk">待接入</span>
       </div>
-      <div class="real-body"></div>
+      <p class="banner" id="risk-banner" role="status"></p>
+      <div class="real-body">
+        <p class="verdict" id="risk-verdict">—<span class="sub" id="risk-sub"></span></p>
+        <div class="evid">
+          <h3 class="sect-h">依据 · 数据源健康（点开看原始值）</h3>
+          <ul class="risk-list" id="risk-evid"></ul>
+        </div>
+        <p class="delta" id="risk-delta"></p>
+      </div>
       <div class="nodata-body">需持仓数据（尚未录入）</div>
     </section>
 

@@ -122,7 +122,7 @@
       IDX.list = await api('/api/indices');
       IDX.at = Date.now();
       renderIdx();
-    } catch (e) { /* 指数条失败不影响主流程 */ }
+    } catch (e) { console.warn('[watchlist] 指数条获取失败', e); }
   }
 
   $('idxChips').addEventListener('click', (e) => {
@@ -495,7 +495,7 @@
     };
 
     inp.focus();
-    try { inp.select(); } catch (e) { /* ignore */ }
+    try { inp.select(); } catch (e) { console.warn('[watchlist] 选中文本不可用', e); }
 
     inp.onkeydown = (e) => {
       e.stopPropagation();
@@ -570,7 +570,7 @@
         const inp = sh.querySelector('.sh-in');
         if (!inp) return;
         inp.focus();
-        try { inp.select(); } catch (err) { /* ignore */ }
+        try { inp.select(); } catch (err) { console.warn('[watchlist] 可选能力不可用', err); }
         if (inp.scrollIntoView) inp.scrollIntoView({ block: 'center' });
       }, 80);
     }
@@ -876,7 +876,7 @@
         if (grp) openGroupSheet(grp.dataset.gid);
       }
       lpStart = null;
-      try { if (navigator.vibrate) navigator.vibrate(14); } catch (err) { /* ignore */ }
+      try { if (navigator.vibrate) navigator.vibrate(14); } catch (err) { console.warn('[watchlist] 可选能力不可用', err); }
     }, 480);
   }, { passive: true });
 

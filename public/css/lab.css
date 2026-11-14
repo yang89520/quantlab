@@ -1,0 +1,181 @@
+/* ============================================================
+   策略实验室 · public/lab.html
+   先引 /css/ql.css（共享设计系统），本文件只补实验室专属样式。
+   约定：正文最小 12px（--fs-xs），徽标才用 11px（--fs-badge）；
+        次级文字 #828FA5，焦点环 #8FBDFF，涨红跌绿。
+   ============================================================ */
+
+/* ---------- 1. 页面级布局 ---------- */
+.lab-grid{display:grid;gap:var(--sp-4);grid-template-columns:1fr;padding:var(--sp-4)}
+@media (min-width:1100px){ .lab-grid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)} }
+.stack{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0}
+.card-inner{background:var(--card2)}
+.field-label{font-size:var(--fs-xs);color:var(--tx3);font-weight:600}
+#gutter{overflow:hidden}
+
+.panel-pad{padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-4)}
+.panel-head{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.panel-head .sect-h{margin-bottom:0}
+.panel-head .btn{margin-left:auto}
+.lab-sep{border-top:1px solid var(--line)}
+
+.toolbar{display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:center;
+  padding:var(--sp-3) var(--sp-4);border-top:1px solid var(--line)}
+.toolbar .grow{flex:1 1 auto}
+
+/* ---------- 2. 文本与提示 ---------- */
+.lab-sub{font-size:var(--fs-xs);color:#828FA5;line-height:1.6}
+.lab-note{font-size:var(--fs-xs);color:var(--tx2);line-height:1.6;
+  background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:8px 10px}
+.lab-note:empty{display:none}
+.edit-msg{font-size:var(--fs-xs);line-height:1.6;padding:0 var(--sp-4) var(--sp-3);color:var(--tx2);min-height:1.2em}
+.edit-msg.ok{color:var(--dn2)}
+.edit-msg.err{color:var(--up2)}
+
+.lab-empty{
+  border:1px dashed var(--line2);border-radius:var(--r-md);
+  padding:var(--sp-4);text-align:center;
+  font-size:var(--fs-sm);color:#828FA5;background:var(--card2);line-height:1.6;
+}
+
+/* ---------- 3. 错误条 / 警告条 ---------- */
+.lab-err{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;
+  padding:10px 12px;border-radius:var(--r-md);margin-bottom:var(--sp-4);
+  border:1px solid rgba(246,70,93,.4);background:rgba(246,70,93,.07);
+  color:var(--up2);font-size:var(--fs-xs);line-height:1.6}
+.lab-err[hidden]{display:none}
+.lab-err-ico{width:20px;height:20px;flex:0 0 auto;border-radius:50%;
+  background:rgba(246,70,93,.16);border:1px solid rgba(246,70,93,.5);
+  display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.lab-err-msg{flex:1 1 auto;min-width:0;color:var(--up2)}
+
+.lab-warn{display:flex;align-items:flex-start;gap:var(--sp-2);
+  padding:10px 12px;border-radius:var(--r-md);margin-bottom:var(--sp-4);
+  border:1px solid rgba(232,184,75,.4);background:rgba(232,184,75,.07);
+  color:var(--gold);font-size:var(--fs-xs);line-height:1.6}
+.lab-warn[hidden]{display:none}
+.lab-warn > span:first-child{width:20px;height:20px;flex:0 0 auto;border-radius:50%;
+  background:rgba(232,184,75,.14);border:1px solid rgba(232,184,75,.5);
+  display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.lab-warn b{font-weight:600}
+.lab-warn-sub{display:block;margin-top:2px;color:var(--tx2);font-size:var(--fs-xs)}
+.lab-warn-inline{font-size:var(--fs-xs);color:var(--gold);line-height:1.6;
+  border:1px solid rgba(232,184,75,.3);background:rgba(232,184,75,.06);
+  border-radius:var(--r-sm);padding:8px 10px}
+.lab-warn-inline[hidden]{display:none}
+
+/* ---------- 4. 保存守卫 ---------- */
+.lab-guard{font-size:var(--fs-xs);line-height:1.5;font-weight:600}
+.lab-guard.hi{color:var(--up2)}
+.lab-guard.warn{color:var(--gold)}
+.lab-guard.ok{color:var(--dn2)}
+
+/* ---------- 5. 输出线列表（必须手选） ---------- */
+.lines-list{display:flex;flex-direction:column;gap:var(--sp-2);margin-bottom:var(--sp-2)}
+.lines-list:empty{display:none}
+.line-opt{display:flex;align-items:flex-start;gap:10px;
+  padding:10px 12px;border:1px solid var(--line2);border-radius:var(--r-md);
+  background:var(--card);cursor:pointer;min-height:44px;transition:border-color .16s,background .16s}
+.line-opt:hover{border-color:#33455E}
+.line-opt:has(input:checked){border-color:var(--focus);background:rgba(107,165,255,.07)}
+.line-opt input{margin-top:3px;accent-color:var(--blue);flex:0 0 auto;width:16px;height:16px}
+.line-opt .txt{min-width:0;display:flex;flex-direction:column;gap:2px}
+.line-opt .nm{font-size:var(--fs-sm);font-weight:600;color:var(--tx)}
+.line-opt .ex{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:var(--fs-xs);color:#828FA5;word-break:break-all;line-height:1.5}
+.line-opt input:focus-visible{outline:2px solid #8FBDFF;outline-offset:2px}
+
+/* ---------- 6. 未来函数扫描 ---------- */
+.scan-item .ico{font-weight:700;flex:0 0 auto}
+.scan-item.hi .ico{color:var(--up2)}
+.scan-item.mid .ico{color:var(--gold)}
+.scan-item.lo .ico{color:var(--tx3)}
+.scan-item .ln{display:inline-block;font-size:var(--fs-xs);color:inherit;opacity:.8;margin-right:6px}
+#scan-card.is-stale .scan{opacity:.5}
+#scan-card.is-high{border-color:rgba(246,70,93,.5)}
+
+/* ---------- 7. 跑闸进度 ---------- */
+.lab-progress{display:flex;flex-direction:column;gap:var(--sp-2)}
+.lab-progress[hidden]{display:none}
+.lab-progress-head{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;
+  font-size:var(--fs-xs);color:var(--tx2)}
+.lab-progress-head .num{margin-left:auto;color:var(--tx);font-weight:600}
+.lab-progress-track{height:10px;border-radius:5px;background:var(--card2);
+  border:1px solid var(--line);overflow:hidden}
+.lab-progress-fill{height:100%;width:0;background:linear-gradient(90deg,#6BA5FF,#35D0D0);
+  transition:width .3s ease}
+
+/* ---------- 8. 结论与指标 ---------- */
+.verdict-box.v-usable{border-color:rgba(46,189,133,.3);background:rgba(46,189,133,.07)}
+.verdict-box.v-usable .big{color:var(--dn2)}
+.verdict-box.v-doubtful .big{color:var(--gold)}
+.verdict-box.v-unusable{border-color:rgba(246,70,93,.35);background:rgba(246,70,93,.07)}
+.verdict-box.v-unusable .big{color:var(--up2)}
+.verdict-box .chip{margin:0}
+
+.lab-details{border:1px solid var(--line);border-radius:var(--r-md);background:var(--card2)}
+.lab-details summary{cursor:pointer;list-style:none;padding:12px 14px;
+  font-size:var(--fs-sm);font-weight:600;color:var(--tx2);min-height:44px;
+  display:flex;align-items:center;gap:8px}
+.lab-details summary::-webkit-details-marker{display:none}
+.lab-details summary::before{content:"▸";color:var(--tx3);font-size:var(--fs-xs)}
+.lab-details[open] summary::before{content:"▾"}
+.lab-details summary:focus-visible{outline:2px solid #8FBDFF;outline-offset:-2px}
+.lab-details > .kpis,.lab-details > .tbl-wrap{padding:0 14px 14px}
+
+.kpis{display:grid;gap:var(--sp-2);grid-template-columns:1fr 1fr}
+@media (min-width:640px){ .kpis{grid-template-columns:repeat(4,minmax(0,1fr))} }
+.kpi{padding:12px 14px;border-radius:var(--r-md);background:var(--card2);border:1px solid var(--line)}
+.kpi .k{font-size:var(--fs-xs);color:#828FA5}
+.kpi .v{font-size:var(--fs-h2);font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+
+.suspect-note{display:block;font-size:var(--fs-xs);color:var(--gold);margin-top:3px;line-height:1.4}
+
+/* ---------- 9. 实盘 vs 回测 横向条形 ---------- */
+.lab-bars{display:flex;flex-direction:column;gap:var(--sp-3);
+  background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--sp-4)}
+.bar-row{display:grid;grid-template-columns:96px minmax(0,1fr) 84px;align-items:center;gap:var(--sp-3)}
+.bar-label{font-size:var(--fs-xs);color:var(--tx2);font-weight:600}
+.bar-track{height:18px;border-radius:9px;background:var(--card);border:1px solid var(--line);overflow:hidden}
+.bar-fill{height:100%;width:0;border-radius:9px;transition:width .4s ease}
+.bar-live{background:linear-gradient(90deg,#8E1B2E,#F6465D)}
+.bar-bt{background:linear-gradient(90deg,#2E5AA8,#6BA5FF)}
+.bar-val{font-size:var(--fs-sm);font-weight:700;text-align:right;color:var(--tx)}
+.bar-val.na{color:var(--tx3);font-weight:600;font-size:var(--fs-xs)}
+.legend-row{display:flex;gap:var(--sp-4);flex-wrap:wrap;font-size:var(--fs-xs);color:#828FA5;margin-top:var(--sp-1)}
+.legend-row span{display:inline-flex;align-items:center;gap:6px}
+.legend-row i{width:14px;height:2px;border-radius:1px;flex:0 0 auto}
+
+/* ---------- 10. 抽屉内的原始值表 ---------- */
+.drawer-raw{width:100%;border-collapse:collapse;font-size:var(--fs-xs)}
+.drawer-raw th,.drawer-raw td{text-align:left;padding:7px 0;border-bottom:1px solid var(--line);
+  color:var(--tx2);font-weight:400;vertical-align:top;word-break:break-all}
+.drawer-raw th{color:#828FA5;font-weight:600;width:42%;padding-right:12px}
+.drawer-raw td{color:var(--tx);font-variant-numeric:tabular-nums}
+.drawer-raw tr:last-child th,.drawer-raw tr:last-child td{border-bottom:none}
+.drawer-sub{font-size:var(--fs-xs);color:#828FA5;line-height:1.6}
+
+/* ---------- 11. 焦点环与动效 ---------- */
+.lab-progress-track:focus-visible{outline:2px solid #8FBDFF;outline-offset:2px}
+@media (prefers-reduced-motion: reduce){
+  .lab-progress-fill,.bar-fill,.line-opt,.btn{transition:none!important;animation:none!important}
+}
+
+/* ---------- 12. 移动端 ≤768px ---------- */
+@media (max-width:768px){
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .lab-grid{grid-template-columns:1fr;padding:var(--sp-3)}
+  .stack{min-width:0}
+  .editor textarea{width:100%}
+  .filter-bar .fld{flex:1 1 100%;min-width:0}
+  .panel-pad{padding:var(--sp-3)}
+  .toolbar{padding:var(--sp-3)}
+  .bar-row{grid-template-columns:80px minmax(0,1fr) 72px;gap:var(--sp-2)}
+  /* 抽屉全屏 */
+  dialog.drawer{
+    margin:0;width:100%;max-width:100%;
+    height:100vh;max-height:100vh;border-radius:0;
+    border-left:none;border-right:none;border-top:none;border-bottom:none;
+  }
+}

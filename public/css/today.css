@@ -182,3 +182,69 @@
   color:var(--up2);border-radius:6px;padding:6px 12px;font-family:inherit;
   font-size:var(--fs-xs);cursor:pointer;min-height:34px}
 .errbox button:hover{background:rgba(246,70,93,.15)}
+
+/* ============================================================
+   四期补齐：②③④⑤ 接真数据 + 移动端折叠
+   ============================================================ */
+
+/* 有真实数据的格子：即便仍带 nodata 标记（冒烟测试的回归守卫要求保留），
+   也强制显示 .real-body、隐藏 .nodata-body、恢复不透明度。
+   选择器带 .nodata.is-live 以提高特异性，稳定覆盖上方 .cell.nodata 规则。 */
+.cell.is-live,.cell.nodata.is-live{opacity:1}
+.cell.is-live .real-body,.cell.nodata.is-live .real-body{display:block}
+.cell.is-live .nodata-body,.cell.nodata.is-live .nodata-body{display:none}
+
+.cell a{color:var(--focus);text-decoration:none}
+.cell a:hover{text-decoration:underline}
+.evid li b{color:var(--tx);font-variant-numeric:tabular-nums}
+.recent-seq .ok{color:var(--dn2)}
+.recent-seq .no{color:var(--up2)}
+
+/* ② 主线：行业榜 / 概念榜两个独立小栏 */
+.boards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.board{min-width:0;background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);padding:10px}
+.board h4{font-size:var(--fs-xs);font-weight:600;color:var(--tx2);margin:0 0 8px}
+.board ol{list-style:none;display:flex;flex-direction:column;gap:7px;margin:0;padding:0}
+.board li{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-xs);min-width:0}
+.board li.empty{color:var(--tx3-fixed)}
+.board .rank{font-size:var(--fs-badge);color:var(--tx3-fixed);font-variant-numeric:tabular-nums;min-width:18px}
+.board .sc{margin-left:auto;font-size:var(--fs-xs);font-weight:600;font-variant-numeric:tabular-nums;color:var(--tx2)}
+.gr{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 3px;
+  border-radius:5px;font-size:var(--fs-badge);font-weight:700;line-height:1}
+.gr-A{background:rgba(246,70,93,.16);color:var(--up2);border:1px solid rgba(246,70,93,.35)}
+.gr-B{background:rgba(232,184,75,.16);color:var(--gold);border:1px solid rgba(232,184,75,.35)}
+.gr-C{background:rgba(107,165,255,.16);color:#8FBDFF;border:1px solid rgba(107,165,255,.35)}
+.gr-D{background:var(--card2);color:var(--tx3-fixed);border:1px solid var(--line2)}
+.deg-tag{font-size:var(--fs-badge);color:var(--tx3-fixed);background:var(--card2);
+  border:1px solid var(--line2);border-radius:4px;padding:1px 5px;line-height:1.4}
+.footnote{font-size:var(--fs-xs);color:var(--tx3-fixed);line-height:1.55;background:var(--card2);
+  border:1px dashed var(--line2);border-radius:var(--r-sm);padding:8px 10px}
+
+/* ④ 候选 / ⑤ 风险 列表 */
+.cand-list{list-style:none;display:flex;flex-direction:column;gap:6px;margin:0;padding:0}
+.cand-list li{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:var(--fs-sm)}
+.cand-list li.empty{color:var(--tx3-fixed);font-size:var(--fs-xs)}
+.cand-list a{font-weight:600;font-variant-numeric:tabular-nums}
+.cand-list .dir{font-size:var(--fs-badge);color:var(--up2);border:1px solid rgba(246,70,93,.3);border-radius:4px;padding:1px 5px}
+.cand-list .why{font-size:var(--fs-xs);color:var(--tx3-fixed)}
+.risk-list{list-style:none;display:flex;flex-direction:column;gap:6px;margin:0;padding:0}
+.risk-list li{display:block;font-size:var(--fs-sm);color:var(--tx2);line-height:1.55;
+  background:var(--card2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px}
+.risk-list .rk{font-weight:600;color:var(--tx)}
+.risk-list .rd{display:block;font-size:var(--fs-xs);color:var(--tx3-fixed);margin-top:3px;
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+
+/* ⑥ 对账：归因图例 / 样本不足提示 */
+.attr-legend{font-size:var(--fs-xs);color:var(--tx3-fixed);line-height:1.6}
+.sample-note{font-size:var(--fs-xs);color:var(--gold);background:rgba(232,184,75,.07);
+  border:1px solid rgba(232,184,75,.25);border-radius:var(--r-sm);padding:8px 10px;line-height:1.5}
+
+/* 移动端 ②③④ 折叠：默认只展开 ②，③④ 可展开（结论始终可见） */
+.fold-toggle{display:none;margin-left:6px;background:none;border:1px solid var(--line2);
+  color:var(--tx3-fixed);border-radius:6px;padding:3px 8px;font-family:inherit;
+  font-size:var(--fs-xs);cursor:pointer;min-height:30px}
+.fold-body{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+@media (max-width:767px){
+  .fold-toggle{display:inline-flex}
+  .cell.is-collapsed .fold-body{display:none}
+}

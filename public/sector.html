@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>板块详情 · QuantLab</title>
+<!-- 设计系统：先共享令牌 ql.css，再页面专属 sector.css -->
+<link rel="stylesheet" href="/css/ql.css">
+<link rel="stylesheet" href="/css/sector.css">
+</head>
+<body>
+
+<a class="skip" href="#main">跳到主内容</a>
+
+<header>
+  <div class="hd">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">QL</div>
+      <b>QuantLab</b>
+    </div>
+    <nav aria-label="主导航">
+      <a href="/today">今日一页</a>
+      <a href="/watch">观察池</a>
+      <a href="/lab">策略实验室</a>
+      <a href="/" class="tool">分析台</a>
+      <a href="/screen" class="tool">选股器</a>
+    </nav>
+    <div class="hd-status" id="hd-status" aria-label="服务健康状态">
+      <span class="tag">健康状态读取中…</span>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="sector-wrap">
+
+  <!-- 返回下钻来源 -->
+  <p class="back"><a class="back-link" href="/today">&larr; 返回「今日一页」</a></p>
+
+  <!-- 标题：板块名（唯一 h1）+ 档位徽标 + 类型 + 数据时点 -->
+  <div class="page-hd">
+    <h1 id="sec-name">板块详情</h1>
+    <span class="grade-badge grade-none" id="grade-badge">—</span>
+    <span class="meta" id="sec-type">类型：—</span>
+    <span class="meta" id="sec-date">数据时点：—</span>
+  </div>
+
+  <!-- 加载状态 / 错误条 / 空态 -->
+  <div class="statusbar" id="statusbar" role="status" aria-live="polite">正在读取板块数据…</div>
+
+  <div class="errbox" id="errbox" role="alert" hidden>
+    <span id="err-text"></span>
+    <button type="button" class="btn btn-danger btn-sm" id="btn-retry">重试</button>
+  </div>
+
+  <div class="empty-state" id="empty-notfound" hidden>未找到该板块</div>
+
+  <!-- 真实数据主体：初始隐藏，数据到达后再显示，避免闪现占位 -->
+  <div id="content" hidden>
+
+    <!-- 概览：综合强度 + 是否今日主线 + 降级角标 -->
+    <section class="card ov-card" aria-label="板块概览">
+      <span class="badge-corner" id="deg-corner" hidden>资金数据缺失</span>
+      <div class="card-bd ov">
+        <div class="ov-score">
+          <span class="ov-label">综合强度</span>
+          <span class="ov-num num" id="ov-score">—</span>
+          <span class="ov-max">/ 100</span>
+        </div>
+        <div class="ov-tags">
+          <span class="ml-tag ml-unknown" id="ml-tag">主线状态读取中…</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="sec-grid">
+
+      <!-- 四因子拆解 -->
+      <section class="card" aria-labelledby="h-factors">
+        <div class="card-hd">
+          <h2 id="h-factors">四因子拆解</h2>
+          <span class="card-hd-sub">0~100 分位 · 来自 parts</span>
+        </div>
+        <div class="card-bd">
+          <ul class="factor-list" id="factor-list"></ul>
+        </div>
+      </section>
+
+      <!-- 20 日强度走势 -->
+      <section class="card" aria-labelledby="h-trend">
+        <div class="card-hd">
+          <h2 id="h-trend">20 日强度走势</h2>
+          <span class="card-hd-sub" id="trend-sub"></span>
+        </div>
+        <div class="card-bd">
+          <div class="spark-wrap" id="spark-wrap">
+            <svg class="spark" id="spark" viewBox="0 0 600 180" role="img" aria-label="20 日强度走势折线"></svg>
+          </div>
+          <p class="trend-empty" id="trend-empty" hidden>历史数据不足</p>
+        </div>
+      </section>
+
+      <!-- metrics 原始值表：结论可点回原始值 -->
+      <section class="card card-wide" aria-labelledby="h-metrics">
+        <div class="card-hd">
+          <h2 id="h-metrics">原始值（结论可点回）</h2>
+          <span class="card-hd-sub">来自 metrics · 真实值，缺失显示「—」</span>
+        </div>
+        <div class="card-bd">
+          <div class="tbl-wrap">
+            <table class="tbl metric-tbl">
+              <caption class="sr-only">板块各项原始指标值（API 原始数值，未经换算）</caption>
+              <thead>
+                <tr><th scope="col">指标</th><th scope="col">字段</th><th scope="col" class="r">原始值</th></tr>
+              </thead>
+              <tbody id="metric-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 失效条件（判断型口径，固定文案，来自 06 §2.3② M1） -->
+      <section class="card" aria-labelledby="h-invalid">
+        <div class="card-hd"><h2 id="h-invalid">失效条件</h2></div>
+        <div class="card-bd">
+          <div class="invalid">
+            <ul>
+              <li>A 档板块次日跌出前 30%</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 成分股：真实代码，点跳分析台 -->
+      <section class="card card-wide" aria-labelledby="h-members">
+        <div class="card-hd">
+          <h2 id="h-members">成分股</h2>
+          <span class="card-hd-sub" id="member-count"></span>
+        </div>
+        <div class="card-bd">
+          <ul class="member-list" id="member-list"></ul>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- 脚注：数据可追溯 -->
+    <div class="footnotes">
+      <div class="footnote">
+        <span class="footnote-label">幸存者偏差</span>
+        <p id="footnote-text">—</p>
+      </div>
+      <div class="footnote" id="degrade-box" hidden>
+        <span class="footnote-label">降级原因（原始值）</span>
+        <p id="degrade-foot-text">—</p>
+      </div>
+      <div class="footnote">
+        <span class="footnote-label">分位口径</span>
+        <p id="scope-text">—</p>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <div class="disclaim">
+      <h4>免责声明</h4>
+      <p>本页所有评分、分位、成分与走势均为技术分析结果，不构成投资建议。数据来源为公开接口与本地行情库，可能存在延迟或缺失，请以行情软件为准。股市有风险，投资需谨慎。</p>
+    </div>
+  </footer>
+
+</main>
+
+<script src="/js/sector.js"></script>
+</body>
+</html>

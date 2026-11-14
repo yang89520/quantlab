@@ -4,11 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>观察池 · QuantLab</title>
-<link rel="stylesheet" href="/css/style.css">
-<link rel="stylesheet" href="/css/today.css">
+<link rel="stylesheet" href="/css/ql.css">
+<link rel="stylesheet" href="/css/watch.css">
 </head>
 <body>
 <a class="skip" href="#main">跳到主内容</a>
+
 <header>
   <div class="hd">
     <div class="brand"><div class="logo" aria-hidden="true">QL</div><b>QuantLab</b></div>
@@ -19,26 +20,88 @@
       <a href="/" class="tool">分析台</a>
       <a href="/screen" class="tool">选股器</a>
     </nav>
+    <div class="hd-status" id="hd-status" aria-live="polite"></div>
   </div>
 </header>
-<main id="main" class="today-wrap">
-  <div class="today-hd"><h1>观察池</h1><p>二期功能 · 尚未上线</p></div>
-  <div class="statusbar is-warn"><span class="dot" aria-hidden="true"></span>
-    <span>该页面依赖板块强度与状态机，按计划在二期实现</span></div>
-  <div class="cell" style="margin-bottom:12px">
-    <div class="cell-hd"><span class="idx" aria-hidden="true">·</span><h2>上线后将提供</h2></div>
-    <div class="invalid" style="background:rgba(107,165,255,.05);border-color:rgba(107,165,255,.2)">
-      <h3 class="sect-h" style="color:#6BA5FF">规格（docs/dev/06 §3）</h3>
-      <ul>
-        <li>状态筛选 6 项：待观察 / 埋伏 / 启动确认 / 持有 / 已移出</li>
-        <li>停留进度：3/15 天，超 80% 标黄提示「快超期」</li>
-        <li>详情抽屉：状态时间轴 + 失效条件 + 走势（含 MA20）+ 同板块对比</li>
-        <li>移出必选原因（逻辑破 / 太慢 / 被替代 / 判断错了），选「判断错了」才追问「错在哪」</li>
-      </ul>
-    </div>
-    <p class="delta"><span class="now">移出原因是判断力语料库的原料</span></p>
+
+<main id="main" tabindex="-1">
+  <div class="page-hd">
+    <h1>观察池</h1>
+    <p id="page-sub">正在读取观察池数据…</p>
   </div>
-  <p style="font-size:13px;color:#828FA5">当前可用的是一期闭环：<a href="/today" style="color:#6BA5FF">今日一页</a> 已接入真实数据。</p>
+
+  <!-- API 失败：错误条 + 重试 -->
+  <div class="errbox" id="errbox" role="alert" hidden>
+    <span id="err-text"></span>
+    <button type="button" id="btn-retry">重试</button>
+  </div>
+
+  <!-- 池计数条：在池 N / maxSize（全部来自 API） -->
+  <div class="pool-tally" role="status" aria-live="polite">
+    <div class="pt-main">
+      <span class="pt-label">在池</span>
+      <span class="pt-n num" id="pt-n">—</span>
+      <span class="pt-of num" id="pt-of">/ —</span>
+    </div>
+    <div class="pt-sub" id="pt-sub"></div>
+  </div>
+
+  <section class="card watch-card" aria-label="观察池标的">
+    <!-- 6 个状态筛选 tab（数量为 JS 注入的真实值） -->
+    <div class="tabs" role="tablist" aria-label="按状态筛选" id="tabs">
+      <button type="button" role="tab" id="tab-all" data-filter="all" aria-controls="watch-panel" aria-selected="true" tabindex="0">全部 <span class="cnt" id="cnt-all">—</span></button>
+      <button type="button" role="tab" id="tab-watching" data-filter="watching" aria-controls="watch-panel" aria-selected="false" tabindex="-1">待观察 <span class="cnt" id="cnt-watching">—</span></button>
+      <button type="button" role="tab" id="tab-ambush" data-filter="ambush" aria-controls="watch-panel" aria-selected="false" tabindex="-1">埋伏 <span class="cnt" id="cnt-ambush">—</span></button>
+      <button type="button" role="tab" id="tab-confirmed" data-filter="confirmed" aria-controls="watch-panel" aria-selected="false" tabindex="-1">启动确认 <span class="cnt" id="cnt-confirmed">—</span></button>
+      <button type="button" role="tab" id="tab-holding" data-filter="holding" aria-controls="watch-panel" aria-selected="false" tabindex="-1">持有 <span class="cnt" id="cnt-holding">—</span></button>
+      <button type="button" role="tab" id="tab-removed" data-filter="removed" aria-controls="watch-panel" aria-selected="false" tabindex="-1">已移出 <span class="cnt" id="cnt-removed">—</span></button>
+    </div>
+    <div role="tabpanel" id="watch-panel" aria-labelledby="tab-all" tabindex="0">
+      <div id="list-region"></div>
+    </div>
+  </section>
 </main>
+
+<footer>
+  <div class="disclaim">
+    <h4>免责声明</h4>
+    <p>观察池仅记录待跟踪标的，不代表推荐买入。所有状态由规则自动流转，可人工复核。移出原因进入判断力语料库，仅用于自我复盘。本页所有数据来自本地接口，可能存在延迟或缺失。股市有风险，投资需谨慎。</p>
+  </div>
+</footer>
+
+<!-- 详情抽屉 -->
+<dialog class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+  <div class="dlg-hd">
+    <h2 id="drawer-title">标的详情</h2>
+    <button class="x" type="button" id="drawer-close" aria-label="关闭详情">×</button>
+  </div>
+  <div class="dr-bd" id="drawer-body"></div>
+</dialog>
+
+<!-- 移出对话框 -->
+<dialog id="rm" aria-labelledby="rm-title">
+  <div class="dlg-hd">
+    <h2 id="rm-title">移出观察池</h2>
+    <button class="x" type="button" id="rm-x" aria-label="关闭">×</button>
+  </div>
+  <div class="dlg-bd">
+    <p class="dlg-sub">移出 <b id="rm-target">—</b>。请选择原因——它会进入判断力语料库，比买入记录更有价值。</p>
+    <fieldset class="reasons" id="rm-reasons">
+      <legend>移出原因（必选，四选一）</legend>
+      <!-- 单选由 JS 根据 /api/watchpool 的 reasons 生成 -->
+    </fieldset>
+    <div class="field" id="rm-wrong-wrap" hidden>
+      <label for="rm-wrong">错在哪（选填）</label>
+      <input id="rm-wrong" type="text" autocomplete="off" placeholder="例如：把反弹当成了反转">
+    </div>
+    <p class="err" id="rm-err" role="alert">请先选择一个移出原因</p>
+  </div>
+  <div class="dlg-ft">
+    <button class="btn" type="button" id="rm-cancel">取消</button>
+    <button class="btn btn-primary" type="button" id="rm-ok">确认移出</button>
+  </div>
+</dialog>
+
+<script src="/js/watch.js"></script>
 </body>
 </html>

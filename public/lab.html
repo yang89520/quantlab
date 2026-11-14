@@ -4,41 +4,321 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>策略实验室 · QuantLab</title>
-<link rel="stylesheet" href="/css/style.css">
-<link rel="stylesheet" href="/css/today.css">
+<link rel="stylesheet" href="/css/ql.css">
+<link rel="stylesheet" href="/css/lab.css">
 </head>
 <body>
+
 <a class="skip" href="#main">跳到主内容</a>
+
 <header>
   <div class="hd">
     <div class="brand"><div class="logo" aria-hidden="true">QL</div><b>QuantLab</b></div>
     <nav aria-label="主导航">
       <a href="/today">今日一页</a>
+      <a href="/watch">观察池</a>
       <a href="/lab" aria-current="page">策略实验室</a>
-      <a href="/lab">策略实验室</a>
       <a href="/" class="tool">分析台</a>
       <a href="/screen" class="tool">选股器</a>
     </nav>
   </div>
 </header>
-<main id="main" class="today-wrap">
-  <div class="today-hd"><h1>策略实验室</h1><p>三期功能 · 尚未上线</p></div>
-  <div class="statusbar is-warn"><span class="dot" aria-hidden="true"></span>
-    <span>该页面是「策略是否可信」的验证台，按计划在三期实现</span></div>
-  <div class="cell" style="margin-bottom:12px">
-    <div class="cell-hd"><span class="idx" aria-hidden="true">·</span><h2>上线后将提供</h2></div>
-    <div class="invalid" style="background:rgba(107,165,255,.05);border-color:rgba(107,165,255,.2)">
-      <h3 class="sect-h" style="color:#6BA5FF">规格（docs/dev/06 §3）</h3>
-      <ul>
-        <li>五个 tab：策略列表 / 编辑器 / 验证 / 信号跟踪 / 批量回测</li>
-        <li>编辑器：粘贴通达信公式，输出线必须手选，未来函数扫描分三级</li>
-        <li>验证：五道闸用 ✓ ✗ ! — 四态，<b>无法检验 ≠ 通过</b></li>
-        <li>信号：每日信号 + T+1/T+5/T+10 跟踪，实盘与回测双曲线对比</li>
-      </ul>
-    </div>
-    <p class="delta"><span class="now">回测再好，实盘对不上就是有问题</span></p>
+
+<div class="note">
+  <div role="note">策略是否可信，先过五道闸：输出线必须手选，高危未来函数禁止保存，<b>无法检验 ≠ 通过</b>。回测再好，实盘对不上就是有问题。</div>
+</div>
+
+<main id="main">
+  <div class="page-hd">
+    <h1 id="page-title">策略实验室</h1>
+    <p id="page-sub">保存公式、跑五道闸、跟踪实盘信号。</p>
   </div>
-  <p style="font-size:13px;color:#828FA5">当前可用的是一期闭环：<a href="/today" style="color:#6BA5FF">今日一页</a> 已接入真实数据。</p>
+
+  <!-- 全局错误条：API 失败时显示，带重试 -->
+  <div class="lab-err" id="global-error" role="alert" hidden>
+    <span class="lab-err-ico" aria-hidden="true">!</span>
+    <span class="lab-err-msg" id="global-error-msg"></span>
+    <button class="btn btn-sm" type="button" id="global-error-retry">重试</button>
+    <button class="btn btn-sm btn-ghost" type="button" id="global-error-close" aria-label="关闭错误提示">关闭</button>
+  </div>
+
+  <!-- Python 计算环境不可用警告（其余部分仍可操作） -->
+  <div class="lab-warn" id="python-warn" role="status" hidden>
+    <span aria-hidden="true">!</span>
+    <span>
+      <b>Python 计算环境不可用，公式回测暂不能用</b>
+      <span class="lab-warn-sub" id="python-warn-reason" hidden></span>
+    </span>
+  </div>
+
+  <div class="card">
+    <div class="tabs" role="tablist" aria-label="策略实验室视图">
+      <button role="tab" id="t-edit" aria-selected="true" aria-controls="p-edit" tabindex="0">编辑器</button>
+      <button role="tab" id="t-gate" aria-selected="false" aria-controls="p-gate" tabindex="-1">验证 <span class="cnt" id="tab-count-gate">—</span></button>
+      <button role="tab" id="t-sig" aria-selected="false" aria-controls="p-sig" tabindex="-1">信号</button>
+      <button role="tab" id="t-track" aria-selected="false" aria-controls="p-track" tabindex="-1">跟踪</button>
+      <button role="tab" id="t-batch" aria-selected="false" aria-controls="p-batch" tabindex="-1">批量</button>
+    </div>
+
+    <!-- ========== 1. 编辑器 ========== -->
+    <div role="tabpanel" id="p-edit" aria-labelledby="t-edit" tabindex="0">
+      <div class="lab-grid">
+        <div class="stack">
+          <div class="row2">
+            <div class="field">
+              <label for="f-name">策略名</label>
+              <input id="f-name" type="text" placeholder="输入策略名" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="f-type">类型</label>
+              <select id="f-type">
+                <option value="formula">公式（通达信源码）</option>
+                <option value="python">Python 脚本</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="f-source">公式源码</label>
+            <div class="editor">
+              <div class="gutter" id="gutter" aria-hidden="true"></div>
+              <textarea id="f-source" spellcheck="false" aria-describedby="code-hint" placeholder="在此粘贴公式 / 脚本源码，保留换行"></textarea>
+            </div>
+            <p id="code-hint" class="lab-sub">支持换行；Tab 键插入两个空格。输出线须由「解析输出线」后手选，不自动猜测。</p>
+          </div>
+
+          <div class="field">
+            <span class="field-label">当前策略版本</span>
+            <p class="lab-sub" id="f-ver">新建策略 · 保存后由接口返回版本号</p>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card card-inner">
+            <div class="card-hd">
+              <h3>输出线（必选 · 手选）</h3>
+              <span class="chip chip-c" id="line-chip">未解析</span>
+            </div>
+            <div class="card-bd">
+              <div class="lines-list" id="lines-list"></div>
+              <p class="lab-sub" id="f-line-current">尚未选择输出线</p>
+            </div>
+          </div>
+
+          <div class="card card-inner" id="scan-card">
+            <div class="card-hd">
+              <h3>未来函数扫描</h3>
+              <span class="chip chip-c" id="scan-chip">未扫描</span>
+            </div>
+            <div class="card-bd">
+              <div class="scan" id="scan-list"></div>
+              <p class="lab-sub" id="scan-note">高危禁止保存；中危允许保存但需留意；提示仅告知。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <span class="lab-guard warn" id="save-guard">请先扫描未来函数，通过后方可保存</span>
+        <span class="grow"></span>
+        <button class="btn" type="button" id="btn-new">新建策略</button>
+        <button class="btn" type="button" id="btn-lines">解析输出线</button>
+        <button class="btn" type="button" id="btn-scan">扫描未来函数</button>
+        <button class="btn btn-primary" type="button" id="btn-save" disabled>保存策略</button>
+      </div>
+      <p class="edit-msg" id="edit-msg" role="status" aria-live="polite"></p>
+    </div>
+
+    <!-- ========== 2. 验证（五道闸） ========== -->
+    <div role="tabpanel" id="p-gate" aria-labelledby="t-gate" tabindex="0" hidden>
+      <div class="panel-pad">
+        <div class="panel-head">
+          <h2 class="sect-h">策略列表</h2>
+          <span class="lab-sub" id="gate-list-note"></span>
+        </div>
+        <div class="tbl-wrap" id="gate-strategy-wrap" hidden>
+          <table class="tbl">
+            <caption>全部策略（版本号由接口返回，状态为 suspect 时标注降级）</caption>
+            <thead>
+              <tr>
+                <th>策略</th><th>类型</th><th class="r">版本</th><th>状态</th>
+                <th>最近结论</th><th class="r">操作</th>
+              </tr>
+            </thead>
+            <tbody id="gate-strategy-tbody"></tbody>
+          </table>
+        </div>
+        <div class="lab-empty" id="gate-strategy-empty" hidden>暂无策略。请在「编辑器」中保存一个策略后再跑五道闸。</div>
+
+        <div class="lab-sep"></div>
+
+        <!-- 跑闸进度 -->
+        <div class="lab-progress" id="gate-progress" hidden>
+          <div class="lab-progress-head">
+            <span id="gate-progress-text">任务已提交，等待执行…</span>
+            <span class="num" id="gate-progress-pct"></span>
+          </div>
+          <div class="lab-progress-track" id="gate-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="五道闸进度">
+            <div class="lab-progress-fill" id="gate-progress-fill"></div>
+          </div>
+        </div>
+
+        <!-- 结果占位 -->
+        <div class="lab-empty" id="gate-placeholder">从上方策略列表点击「跑五道闸」，完成后在此显示三档结论与五道闸明细。</div>
+
+        <!-- 结果 -->
+        <div id="gate-result" hidden>
+          <div class="verdict-box" id="gate-verdict-box">
+            <span class="big num" id="gate-verdict-big">—</span>
+            <span class="why">
+              <b style="color:var(--tx)">结论：<span id="gate-verdict-chip" class="chip chip-c">—</span></b><br>
+              <span id="gate-verdict-why"></span>
+            </span>
+            <button class="btn btn-sm" type="button" id="gate-detail-btn" style="margin-left:auto">查看明细</button>
+          </div>
+
+          <p class="lab-warn-inline" id="gate-suspect" hidden>已降级，实盘表现偏离回测</p>
+
+          <div class="gates" id="gate-list"></div>
+
+          <details class="lab-details" id="gate-metrics-details">
+            <summary>指标明细（交易 / 胜率 / 收益 / 最大回撤 / 夏普）</summary>
+            <div class="kpis" id="gate-kpis"></div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 3. 信号 ========== -->
+    <div role="tabpanel" id="p-sig" aria-labelledby="t-sig" tabindex="0" hidden>
+      <div class="panel-pad">
+        <div class="filter-bar">
+          <div class="fld field">
+            <label for="sig-date">日期</label>
+            <input id="sig-date" type="date">
+          </div>
+          <div class="fld field">
+            <label for="sig-strategy">策略筛选</label>
+            <select id="sig-strategy"><option value="">全部策略</option></select>
+          </div>
+          <div class="fld field">
+            <label for="sig-from">起始日（范围）</label>
+            <input id="sig-from" type="date">
+          </div>
+          <div class="fld field">
+            <label for="sig-to">截止日（范围）</label>
+            <input id="sig-to" type="date">
+          </div>
+          <button class="btn" type="button" id="sig-reload">查询</button>
+          <button class="btn" type="button" id="sig-export">导出 CSV</button>
+        </div>
+        <p class="lab-sub" id="sig-hint">日期选择器指定单日；填写起止日则按范围逐日查询并合并，再按策略与范围过滤。</p>
+        <p class="lab-note" id="sig-note" role="status"></p>
+
+        <div class="tbl-wrap" id="sig-table-wrap" hidden>
+          <table class="tbl">
+            <caption>信号与 T+N 跟踪（T+1 / T+5 / T+10 为信号日收盘价起算的涨跌幅）</caption>
+            <thead>
+              <tr>
+                <th>日期</th><th>策略</th><th>代码</th><th>动作</th>
+                <th class="r">信号日收盘价</th><th class="r">T+1</th><th class="r">T+5</th><th class="r">T+10</th>
+              </tr>
+            </thead>
+            <tbody id="sig-tbody"></tbody>
+          </table>
+        </div>
+        <div class="lab-empty" id="sig-empty" hidden>该日期 / 筛选条件下没有信号。</div>
+      </div>
+    </div>
+
+    <!-- ========== 4. 跟踪 ========== -->
+    <div role="tabpanel" id="p-track" aria-labelledby="t-track" tabindex="0" hidden>
+      <div class="panel-pad">
+        <div class="filter-bar">
+          <div class="fld field">
+            <label for="track-strategy">策略</label>
+            <select id="track-strategy"><option value="">请选择策略</option></select>
+          </div>
+          <button class="btn" type="button" id="track-reload">刷新</button>
+        </div>
+
+        <p class="lab-warn-inline" id="track-degraded" hidden>已降级，实盘表现偏离回测</p>
+
+        <div id="track-content" hidden>
+          <h2 class="sect-h">实盘 vs 回测 命中率</h2>
+          <div class="lab-bars" id="track-bars">
+            <div class="bar-row">
+              <span class="bar-label">实盘命中率</span>
+              <div class="bar-track"><div class="bar-fill bar-live" id="bar-live"></div></div>
+              <span class="bar-val num" id="bar-live-val">—</span>
+            </div>
+            <div class="bar-row">
+              <span class="bar-label">回测命中率</span>
+              <div class="bar-track"><div class="bar-fill bar-bt" id="bar-bt"></div></div>
+              <span class="bar-val num" id="bar-bt-val">—</span>
+            </div>
+            <div class="legend-row">
+              <span><i style="background:#F6465D" aria-hidden="true"></i>实盘命中率</span>
+              <span><i style="background:#6BA5FF" aria-hidden="true"></i>回测命中率</span>
+            </div>
+          </div>
+
+          <details class="lab-details" id="track-list-details">
+            <summary>跟踪记录明细（<span id="track-count">0</span> 条）</summary>
+            <div class="tbl-wrap" id="track-list-body"></div>
+          </details>
+        </div>
+        <div class="lab-empty" id="track-empty" hidden>暂无跟踪数据。</div>
+      </div>
+    </div>
+
+    <!-- ========== 5. 批量 ========== -->
+    <div role="tabpanel" id="p-batch" aria-labelledby="t-batch" tabindex="0" hidden>
+      <div class="panel-pad">
+        <div class="panel-head">
+          <h2 class="sect-h">多策略对比</h2>
+          <button class="btn btn-sm" type="button" id="batch-refresh">刷新</button>
+        </div>
+        <p class="lab-sub">对比数据来自各策略最近一次五道闸结果；未跑闸的策略相关列显示「—」。</p>
+        <div class="tbl-wrap" id="batch-wrap" hidden>
+          <table class="tbl">
+            <caption>已保存策略横向对比（所有数字来自接口）</caption>
+            <thead>
+              <tr>
+                <th>策略</th><th>类型</th><th class="r">版本</th><th>状态</th><th>最近结论</th>
+                <th class="r">交易</th><th class="r">胜率</th><th class="r">收益</th><th class="r">最大回撤</th><th class="r">夏普</th>
+              </tr>
+            </thead>
+            <tbody id="batch-tbody"></tbody>
+          </table>
+        </div>
+        <div class="lab-empty" id="batch-empty" hidden>暂无策略可对比。请先在「编辑器」中保存策略。</div>
+      </div>
+    </div>
+  </div>
 </main>
+
+<footer>
+  <div class="disclaim">
+    <h4>免责声明</h4>
+    <p>回测结果基于历史数据，不代表未来收益。策略上线前须通过五道闸，「存疑」与「不可用」均不建议实盘。所有结论仅供参考，不构成投资建议。股市有风险，投资需谨慎。</p>
+  </div>
+</footer>
+
+<!-- 五道闸明细抽屉 -->
+<dialog id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+  <div class="dlg-hd">
+    <h2 id="drawer-title">五道闸 · 指标原始值</h2>
+    <button class="x" type="button" id="drawer-close" aria-label="关闭明细抽屉">×</button>
+  </div>
+  <div class="dr-bd" id="drawer-body"></div>
+  <div class="dlg-ft">
+    <button class="btn btn-primary" type="button" id="drawer-ok">知道了</button>
+  </div>
+</dialog>
+
+<div id="live-region" class="sr-only" role="status" aria-live="polite"></div>
+
+<script src="/js/lab.js"></script>
 </body>
 </html>

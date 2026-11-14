@@ -1,0 +1,170 @@
+/* ============================================================
+   观察池 · public/watch.html
+   令牌与公共组件全部复用 /css/ql.css；本文件只补观察池专属样式。
+   规则：正文最小 12px（11px 仅徽标）；涨红跌绿；无横向溢出。
+   ============================================================ */
+
+/* 兜底：任何带 hidden 的元素都不被组件 display 规则覆盖 */
+[hidden]{display:none!important}
+
+/* 防止窄屏横向溢出 */
+html,body{max-width:100%;overflow-x:hidden}
+
+/* ---------- 错误条 ---------- */
+.errbox{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  border:1px solid rgba(246,70,93,.4);background:rgba(246,70,93,.07);
+  border-radius:var(--r-md);padding:12px 14px;margin-bottom:16px;
+  font-size:12px;color:var(--up2);line-height:1.6;
+}
+.errbox button{
+  flex:0 0 auto;background:rgba(246,70,93,.10);
+  border:1px solid rgba(246,70,93,.5);color:var(--up2);
+  border-radius:6px;padding:6px 14px;font-family:inherit;
+  font-size:12px;font-weight:600;cursor:pointer;min-height:34px;
+}
+.errbox button:hover{background:rgba(246,70,93,.18)}
+
+/* ---------- 池计数条 ---------- */
+.pool-tally{
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  margin-bottom:16px;padding:14px 16px;border-radius:var(--r-md);
+  background:linear-gradient(180deg,var(--card),var(--bg2));
+  border:1px solid var(--line);
+}
+.pt-main{display:flex;align-items:baseline;gap:8px}
+.pt-label{font-size:13px;color:var(--tx2);font-weight:600}
+.pt-n{font-size:28px;font-weight:700;line-height:1.1}
+.pt-of{font-size:13px;color:var(--tx3)}
+.pt-sub{margin-left:auto;font-size:12px;color:var(--tx3)}
+@media (max-width:768px){ .pt-sub{margin-left:0;flex:1 1 100%} }
+
+.watch-card{overflow:hidden}
+
+/* ---------- 标的列表 / 卡片行 ---------- */
+.list{background:var(--card);border-radius:0;overflow:hidden}
+.row{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
+  padding:14px 16px;border-bottom:1px solid var(--line);
+  cursor:pointer;transition:background .16s;min-width:0;
+}
+.row:last-child{border-bottom:none}
+.row:hover{background:rgba(255,255,255,.015)}
+.row .r-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1 1 240px;min-width:0}
+.row .r-code{font-size:12px;color:var(--tx3)}
+.row .r-name{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.row .act{display:flex;gap:6px;align-items:center;flex:0 0 auto}
+.row .r-meta{
+  flex:1 1 100%;min-width:0;display:flex;flex-wrap:wrap;gap:6px 16px;
+  font-size:12px;color:var(--tx3);
+}
+.row .r-meta > span{min-width:0;overflow-wrap:anywhere}
+.row .r-meta b{color:var(--tx2);font-weight:600;overflow-wrap:anywhere}
+.row .r-meta .chip{font-size:11px}
+
+/* 停留接近上限标黄 */
+.stay-near{color:var(--gold)!important;font-weight:700}
+
+/* 已移出状态徽标 */
+.st-removed{background:rgba(246,70,93,.10);color:var(--tx2);border:1px solid var(--line2)}
+
+/* 涨跌（涨红跌绿） */
+.chg{font-weight:700;font-variant-numeric:tabular-nums}
+.chg-up{color:var(--up2)}
+.chg-dn{color:var(--dn2)}
+.chg-flat{color:var(--tx3)}
+
+/* ---------- 行内「⋯」菜单（视觉补 ql.css 只有 display:none 的 .kebab） ---------- */
+.kebab{
+  align-items:center;justify-content:center;
+  width:36px;height:36px;border-radius:var(--r-sm);
+  border:1px solid var(--line2);background:var(--card2);
+  color:var(--tx2);font-size:16px;line-height:1;
+  font-family:inherit;cursor:pointer;flex:0 0 auto;
+}
+.kebab:hover{background:var(--card3);color:var(--tx)}
+/* ql.css 在 max-width:899px 下：隐藏 .row .act .btn、显示 .row .act .kebab */
+
+/* ---------- 空态 ---------- */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:48px 20px;text-align:center;
+}
+.empty-state .es-ico{
+  width:44px;height:44px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--card2);border:1px dashed var(--line2);
+  color:var(--tx3);font-size:22px;margin-bottom:4px;
+}
+.empty-state h2{font-size:16px;font-weight:600}
+.empty-state p{font-size:12px;color:var(--tx3);max-width:460px;line-height:1.8}
+
+/* ---------- 抽屉内容 ---------- */
+.dr-section{min-width:0}
+.dr-summary{display:flex;flex-direction:column}
+.dr-summary > div{
+  display:flex;gap:10px;padding:8px 0;
+  border-bottom:1px solid var(--line);font-size:12px;min-width:0;
+}
+.dr-summary > div:last-child{border-bottom:none}
+.dr-summary dt{flex:0 0 88px;color:var(--tx3);font-weight:600}
+.dr-summary dd{flex:1 1 auto;min-width:0;color:var(--tx);overflow-wrap:anywhere}
+
+.inv-list{list-style:none;display:flex;flex-direction:column;gap:6px}
+.inv-list li{
+  font-size:12px;color:var(--tx2);line-height:1.55;
+  display:flex;gap:6px;flex-wrap:wrap;
+}
+.inv-list li::before{content:"·";color:var(--gold);flex:0 0 auto}
+
+.chart-empty{
+  font-size:12px;color:var(--tx3);background:var(--card2);
+  border:1px dashed var(--line2);border-radius:var(--r-md);
+  padding:16px;text-align:center;line-height:1.6;
+}
+
+/* 走势图例 */
+.spark-legend{
+  display:flex;gap:12px;flex-wrap:wrap;align-items:center;
+  font-size:12px;color:var(--tx3);margin-top:8px;
+}
+.spark-legend span{display:inline-flex;align-items:center;gap:5px}
+.spark-legend i{width:12px;height:2px;border-radius:1px;display:inline-block;flex:0 0 auto}
+.lg-close{background:#F6465D}
+.lg-ma{background:#6BA5FF}
+.spark-range{margin-left:auto;font-variant-numeric:tabular-nums}
+
+/* 时间轴证据 */
+.tl-ev span{
+  background:var(--card2);border:1px solid var(--line);
+  border-radius:6px;padding:1px 6px;color:var(--tx2);
+  font-variant-numeric:tabular-nums;
+}
+
+/* 加备注 */
+.note-input{
+  width:100%;min-height:80px;padding:10px 12px;
+  border-radius:var(--r-sm);border:1px solid var(--line2);
+  background:var(--card2);color:var(--tx);
+  font-family:inherit;font-size:13px;line-height:1.6;resize:vertical;
+}
+.note-input:focus-visible{outline:2px solid var(--focus);outline-offset:0}
+.note-ft{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+.note-status{font-size:12px;color:var(--tx3)}
+
+/* 抽屉表格不横向溢出 */
+.dr-bd .tbl-wrap{width:100%}
+
+/* ---------- 移动端：抽屉全屏 ---------- */
+@media (max-width:768px){
+  dialog.drawer{
+    width:100%;max-width:100%;
+    height:100vh;max-height:100vh;margin:0;border-radius:0;
+  }
+}
+
+/* ---------- 减少动态效果 ---------- */
+@media (prefers-reduced-motion: reduce){
+  dialog.drawer[open]{animation:none}
+  .row{transition:none}
+}
