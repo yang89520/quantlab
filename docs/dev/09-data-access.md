@@ -570,7 +570,7 @@ async function latestTradingDay() {
 
 | 期 | 受影响内容 |
 |---|---|
-| 一期 | 新增 `datasource.js`（本地优先）+ `store/`（DAO 双后端）；快照与预判卡按 §7.2 分存 |
+| 一期 | 新增 `datasource.js`（本地优先）+ `lib/dao/`（DAO 双后端）；快照与预判卡按 §7.2 分存 |
 | 二期 | 板块成分/强度入 DuckDB；观察池仍 JSONL（Web 可写） |
 | 三期 | `py/` 与 DuckDB 共用 venv；回测 K 线优先从上游库取 |
 | 四期 | 状态条显示数据来源与时点；`stale=true` 必须可见 |

@@ -424,7 +424,7 @@ npm test
 | # | 任务 | 依赖 | 人日 |
 |---|---|---|---|
 | T0 | **`datasource.js` 本地优先解析链 + 上游库只读接入** | — | 1.0 |
-| T1 | **`store/` DAO 双后端（duckdao + jsondao）+ 单测** | — | 1.0 |
+| T1 | **`lib/dao/` DAO 双后端（duckdao + jsondao）+ 单测** | — | 1.0 |
 | T2 | `snapshot.js` + 落盘 | — | 0.5 |
 | T3 | `predict.js`（含 `judgeEnv` 纯函数）+ 单测 | T1,T2 | 1.5 |
 | T4 | `reconcile.js`（含 `attribute`）+ 单测 | T1,T2 | 1.5 |
