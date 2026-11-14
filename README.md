@@ -15,49 +15,66 @@ PORT=8080 npm start
 
 依赖只有 `express` 与 `@duckdb/node-api`（自有业务库），其余全部手写（Canvas K 线渲染、指标算法、流派插件系统、GBK 解码、gzip）。
 DuckDB 驱动装不上时，存储层会自动降级到 JSONL（`config.storage.engine`），全功能仍可跑通。
+三期公式引擎需要独立 Python 环境：`python3 -m venv py/.venv && py/.venv/bin/pip install -r py/requirements.txt`（仅 numpy）。
+Python 不可用时三期功能整体不可用，但一、二期与服务启动照常（`/api/health` 的 `python` 字段会报告原因）。
 
-## 一期闭环：预判 → 对账 → 归因
+## 个人投研工作台：预判 → 对账 → 归因
 
 这是本项目的核心机制。它不做预测优化，只做一件之前没做过的事：**把判断变成可被记录、可被验证的对象**。
+四期已全部上线：今日一页（七格）、观察池、策略实验室，加上原有的分析台与选股器两个工具页。
 
 ### 跑一次
 
 ```bash
-npm run daily      # 收盘后跑：抓快照 → 对账昨日 → 生成明日预判
-npm run report     # 看判断力报告（命中率 / 分状态 / 错因分布）
+npm run daily                        # 收盘后完整闭环
+npm run report                       # 判断力报告（命中率 / 分状态 / 错因分布）
+npm run sector                       # 板块强度人读报告
+npm run sector -- --capture          # 重新采集板块数据后出报告
+node tools/daily-close.js --skip-sector   # 用已有板块榜重跑，省一次全量采集
 ```
 
-`daily` 的顺序是固定的，不可调换：**快照 → 对账（昨日）→ 预判（今日）**。
-先对账再预判，因为先生成新预判会覆盖上下文，而对账要用昨日预判与今日实际。
+`daily` 顺序固定不可调换：**交易日/指数K线/快照 → 板块强度 → 对账 → 预判 → 观察池推进 → 信号回填与自动降级 → 摘要**。
+板块强度必须排在对账之前：`direction` 归因需要目标日板块榜；对账必须排在预判之前：先生成新预判会覆盖上下文。
 
 ### 每天落什么
 
 | 落盘内容 | 用途 |
 |---|---|
-| `snapshot` 表（每只标的每天一行） | 次日对账的唯一基准；不落盘就无法对比昨天 |
-| `prediction` 表（预判卡） | 环境三态 + 评分拆解 + 三条失效条件 + 三情景 + 候选 |
-| `reconcile` 表（对账结果） | 命中/未命中 + 四段归因 + 当日判断得分 |
+| `snapshot` 表（每只标的每天一行） | 次日对账的唯一基准 |
+| `prediction` 表（预判卡） | 环境三态 + 评分拆解 + 失效条件 + 三情景 + 候选 + `mainline` |
+| `reconcile` 表（对账结果） | 命中/未命中 + 四段归因 + 判断得分 |
+| `sector_member` / `sector_strength` | 板块成分与四因子强度（行业/概念分榜） |
+| `strategy_signal` / `strategy_gate` | 策略信号 T+1/5/10 跟踪、五道闸验证档案 |
+| `data/watchpool/` / `data/strategies/` | Web 可写数据（JSONL，避开 DuckDB 单写进程锁） |
 
 ### 归因优先级（写死，不许并行）
 
 ```
-环境错 → env    环境错了就不该怪选股：环境错时选股再好也是逆势
-标的错 → candidate   环境对了选股还亏，才是选股逻辑的问题
+环境错 → env         环境错了就不该怪选股：环境错时选股再好也是逆势
+方向错 → direction   判对了环境但押错板块，不能去怪选股（二期）
+标的错 → candidate   环境与方向都对，选股还亏才是选股逻辑问题
 时机错 → timing      都对但当天冲高回落
 ```
 
-顺序颠倒是归因分析最常见的错误——会让人一直去优化选股，而问题其实在环境判断。
+顺序颠倒是归因分析最常见的错误——会让人一直去优化选股，而问题其实在环境或方向判断。
 
 ### 三条硬规矩
 
 - **不填假数据**：拿不到就显示「需 X 功能」或空态，**绝不显示 0**（0 是有效值，会让人以为真的没有）
-- **不打偷偷降级**：数据不完整时顶部状态条变黄、结论变灰但仍展示，并写明缺什么
+- **不打偷偷降级**：数据不完整时顶部状态条变黄、结论变灰但仍展示；板块资金因子缺失标 `degraded` 并给原因
 - **当日必须实时**：本地库只到 T-1，请求当日强制走网络。拿昨天数据冒充今天是最危险的假数据形态
 
-### 当前进度
+### 测试与验收
 
-一期已上线：① 环境、⑥ 对账、⑦ 明日（真实数据）。② 主线 / ③ 时机 / ④ 候选 / ⑤ 风险 显示「需 X 期功能」，
-按 `docs/dev/` 的四期计划推进——**宁可空着，也不填占位数字**。
+```bash
+npm test            # 26 项原有回归（底线）
+npm run test:unit   # 一期 23 + 二期 24 + 三期 25 + 对账 7 + direction 16 + Python selftest 8
+npm run test:today  # 今日一页 DOM 桩渲染冒烟 10 项
+npm run test:mutate # L4 变异验证：一期 6 + 二期 5 + 三期 5，改坏副本断言必须红
+npm run acceptance  # 全量验收：07 各期清单 + 09 九条数据断言 + 上线检查表
+```
+
+全量验收需先 `npm start`。数据规则（无 mock / 无静默失败 / 元信息 / 当日实时 / 缺失返 null / 不写上游库 / 自有库可独立运行）优先级高于功能验收：**功能可以少做，假数据一条都不许有**。
 
 ## 目录结构
 
@@ -77,22 +94,38 @@ stock-lab/
 │   ├── predict.js         # 环境判定（纯函数）+ 预判卡组装
 │   ├── reconcile.js       # 对账与四段归因（优先级固定）
 │   ├── judgment.js        # 命中率统计与判断力报告
-│   └── dao/               # 统一存储层：DuckDB 主 + JSONL 兜底，同一套接口
+│   ├── sector.js          # 二期：四因子评分 / ABCD 分档 / 横截面分位（纯函数）
+│   ├── sectordata.js      # 二期：新浪板块列表与成分 → 上游库日线 → 等权聚合 → 落盘
+│   ├── sources/           # 二期：资产注册表 / 健康熔断 / 配速 / 新浪·东财·本地库适配器
+│   ├── watchpool.js       # 二期：五态状态机 + S8 迁移日志（JSONL）
+│   ├── pyrunner.js        # 三期：Python runner 子进程 stdin/stdout JSON 协议
+│   ├── gates.js           # 三期：五道闸 + 动态未来函数检测（三态，null≠通过）
+│   ├── strategy.js        # 三期：策略定义版本管理（JSONL）
+│   ├── track.js           # 三期：信号 T+1/5/10 幂等补漏回填
+│   ├── lab.js             # 三期：回测 / 五道闸异步任务队列
+│   └── dao/               # 统一存储层：DuckDB 主 + JSONL 兜底，读写分开缓存
+├── py/tdx_engine/         # 三期：复制并扩充的 TDX 公式引擎（含 STD 等 12 函数 + runner.py）
 ├── data/store.json        # 全部自选数据，可直接编辑
 ├── data/ql.duckdb         # 自有业务库（快照/预判/对账），可由 npm run daily 重建
 ├── config.json            # 阈值与开关（进版本库）
 ├── config.local.json      # 本机覆盖（含上游库路径，不入库）
 ├── data/shape-cache.json  # 形态扫描结果（按交易日分桶，保留 3 天）
 ├── tools/
-│   ├── daily-close.js     # 收盘后编排：快照 → 对账 → 预判
+│   ├── daily-close.js     # 收盘后编排：快照 → 板块 → 对账 → 预判 → 观察池 → 信号回填
 │   ├── pred-report.js     # 判断力报告（人读）
+│   ├── sector-report.js   # 板块强度报告 / 采集入口
 │   ├── verify-tdx.py      # 行情校验：用通达信协议（tdxrs）独立对账 K 线
 │   ├── backtest.py        # 流派实证：SuperTrend / 三灯 / PA 多周期的 A 股样本检验
 │   ├── backtest-tritf.py  # 三周期共振实证：三层过滤、买点形态、退出方式的对照检验
 │   └── backtest-threelock.py # 三把锁实证：原文笔误验证、三把锁逐把拆解、退出与持有时长
 └── public/
-    ├── index.html         # 分析台
-    ├── screen.html        # 选股器
+    ├── index.html         # 分析台（工具页）
+    ├── screen.html        # 选股器（工具页）
+    ├── today.html         # 今日一页（七格，默认入口）
+    ├── watch.html         # 观察池（五态 + 详情抽屉 + 移出四原因）
+    ├── lab.html           # 策略实验室（编辑器 / 五道闸 / 信号 / 跟踪 / 批量）
+    ├── sector.html        # 板块详情下钻（四因子 + 原始值）
+    ├── css/ql.css         # 六页共用设计系统
     ├── css/style.css      # 工作台样式
     ├── css/watchlist.css  # 自选股侧栏样式
     ├── css/screen.css     # 选股器样式
