@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今日一页 · QuantLab</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/today.css">
+</head>
+<body>
+
+<a class="skip" href="#main">跳到主内容</a>
+
+<header>
+  <div class="hd">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">QL</div>
+      <b>QuantLab</b>
+    </div>
+    <nav aria-label="主导航">
+      <a href="/today" aria-current="page">今日一页</a>
+      <a href="/watch">观察池</a>
+      <a href="/lab">策略实验室</a>
+      <a href="/" class="tool">分析台</a>
+      <a href="/screen" class="tool">选股器</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="today-wrap">
+  <div class="today-hd">
+    <h1>今日一页</h1>
+    <p id="page-sub">加载中…</p>
+  </div>
+
+  <div class="statusbar" id="statusbar" role="status" aria-live="polite">
+    <span class="dot" aria-hidden="true"></span>
+    <span id="status-text">正在读取今日数据…</span>
+    <span class="sep" id="status-side"></span>
+  </div>
+
+  <div class="cells" id="cells">
+
+    <!-- ① 环境（判断型） -->
+    <section class="cell cell--env" id="cell-env" aria-labelledby="h-env">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">①</span>
+        <h2 id="h-env">环境</h2>
+        <span class="chip chip-none" id="env-chip">—</span>
+      </div>
+      <p class="banner" id="env-banner" role="status"></p>
+      <div class="real-body" id="env-body">
+        <p class="verdict" id="env-verdict">—<span class="sub" id="env-sub"></span></p>
+        <div class="breakdown" id="env-breakdown" hidden>
+          <div class="bd-bar" id="env-bar" role="img"></div>
+          <div class="bd-legend" id="env-legend"></div>
+        </div>
+        <div class="evid">
+          <h3 class="sect-h">依据</h3>
+          <ul id="env-evid"></ul>
+        </div>
+        <div class="invalid" id="env-invalid" hidden>
+          <h3 class="sect-h">失效条件</h3>
+          <ul id="env-invalid-list"></ul>
+        </div>
+        <p class="delta" id="env-delta"></p>
+      </div>
+      <div class="nodata-body">需一期数据（环境判定）</div>
+    </section>
+
+    <!-- ⑥ 对账（陈述型） -->
+    <section class="cell cell--recon" id="cell-recon" aria-labelledby="h-recon">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">⑥</span>
+        <h2 id="h-recon">对账</h2>
+        <span class="chip chip-fact">已发生</span>
+      </div>
+      <p class="banner" id="recon-banner" role="status"></p>
+      <div class="real-body" id="recon-body">
+        <p class="verdict" id="recon-verdict">—<span class="sub" id="recon-sub"></span></p>
+        <table class="cmp" id="recon-table" hidden>
+          <caption class="sr-only">昨日预判与今日实际对照</caption>
+          <tbody id="recon-tbody"></tbody>
+        </table>
+        <div class="hits" id="recon-hits"></div>
+        <p class="delta" id="recon-delta"></p>
+      </div>
+      <div class="nodata-body">需一期数据（对账结果）</div>
+    </section>
+
+    <!-- ② 主线（依赖二期） -->
+    <section class="cell cell--mainline nodata" id="cell-mainline" aria-labelledby="h-main">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">②</span>
+        <h2 id="h-main">主线</h2>
+        <span class="chip chip-none">未上线</span>
+      </div>
+      <div class="real-body"></div>
+      <div class="nodata-body">需二期功能（板块强度）</div>
+    </section>
+
+    <!-- ③ 时机（依赖三期） -->
+    <section class="cell cell--timing nodata" id="cell-timing" aria-labelledby="h-timing">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">③</span>
+        <h2 id="h-timing">时机</h2>
+        <span class="chip chip-none">未上线</span>
+      </div>
+      <div class="real-body"></div>
+      <div class="nodata-body">需三期功能（策略实验室）</div>
+    </section>
+
+    <!-- ④ 候选（依赖二期） -->
+    <section class="cell cell--watch nodata" id="cell-watch" aria-labelledby="h-watch">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">④</span>
+        <h2 id="h-watch">候选</h2>
+        <span class="chip chip-none">未上线</span>
+      </div>
+      <div class="real-body"></div>
+      <div class="nodata-body">需二期功能（观察池）</div>
+    </section>
+
+    <!-- ⑤ 风险（需持仓数据） -->
+    <section class="cell cell--risk nodata" id="cell-risk" aria-labelledby="h-risk">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">⑤</span>
+        <h2 id="h-risk">风险</h2>
+        <span class="chip chip-fact">待接入</span>
+      </div>
+      <div class="real-body"></div>
+      <div class="nodata-body">需持仓数据（尚未录入）</div>
+    </section>
+
+    <!-- ⑦ 明日三情景（判断型） -->
+    <section class="cell cell--plan" id="cell-plan" aria-labelledby="h-plan">
+      <div class="cell-hd">
+        <span class="idx" aria-hidden="true">⑦</span>
+        <h2 id="h-plan">明日</h2>
+        <span class="chip chip-none" id="plan-chip">—</span>
+      </div>
+      <p class="banner" id="plan-banner" role="status"></p>
+      <div class="real-body">
+        <p class="verdict" id="plan-verdict">—<span class="sub" id="plan-sub"></span></p>
+        <div class="scene" id="plan-scene"></div>
+        <div class="invalid" id="plan-invalid" hidden>
+          <h3 class="sect-h">失效条件</h3>
+          <ul id="plan-invalid-list"></ul>
+        </div>
+        <p class="delta" id="plan-delta"></p>
+      </div>
+      <div class="nodata-body">需一期数据（预判卡）</div>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <div class="disclaim" style="max-width:1280px;margin:0 auto">
+    <h4>免责声明</h4>
+    <p>本页所有判断、评分均为技术分析结果，不构成投资建议。数据来源为公开接口与本地行情库，可能存在延迟或缺失。
+       股市有风险，投资需谨慎。</p>
+  </div>
+</footer>
+
+<script src="/js/today.js"></script>
+</body>
+</html>

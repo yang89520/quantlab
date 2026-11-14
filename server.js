@@ -371,6 +371,118 @@ app.get('/api/screen/meta', async (req, res) => {
 });
 
 /* ---------------- 兜底 ---------------- */
+/* ============================================================
+   一期闭环 API（docs/dev/03 §5）
+   ============================================================ */
+const storeDao = require('./lib/dao');
+const judgment = require('./lib/judgment');
+const ds = require('./lib/datasource');
+const snapLib = require('./lib/snapshot');
+const pkg = require('./package.json');
+
+/** 最近一张预判卡（含对账结果） */
+app.get('/api/predict/today', async (req, res) => {
+  try {
+    const st = await storeDao.open({ readOnly: true });
+    const rows = await st.query('prediction', { order: 'date', desc: true, limit: 1 });
+    if (!rows.length) return ok(res, null);
+    ok(res, rows[0].payload);
+  } catch (e) { fail(res, e); }
+});
+
+/** 预判卡列表（精简字段，不含 payload） */
+app.get('/api/predict/list', async (req, res) => {
+  try {
+    const st = await storeDao.open({ readOnly: true });
+    const preds = await st.query('prediction', { order: 'date', desc: true, limit: 200 });
+    const recs = await st.query('reconcile', { order: 'date', desc: true, limit: 200 });
+    const byDate = new Map(recs.map((r) => [r.date, r]));
+    const from = req.query.from, to = req.query.to;
+    const list = preds
+      .filter((p) => (!from || p.date >= from) && (!to || p.date <= to))
+      .map((p) => {
+        const r = byDate.get(p.date);
+        return {
+          date: p.date,
+          targetDate: (p.payload && p.payload.targetDate) || p.target_date,
+          verdict: p.verdict,
+          score: p.score,
+          dataComplete: p.data_complete,
+          reconciled: !!r && !r.skipped,
+          attribution: r ? r.attribution : null,
+          judgmentScore: r ? r.judgment_score : null,
+        };
+      });
+    ok(res, { total: list.length, list });
+  } catch (e) { fail(res, e); }
+});
+
+/** 指定日期的预判卡（必须放在 /list 之后，否则 'list' 会被当成日期） */
+app.get('/api/predict/:date', async (req, res) => {
+  try {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.date)) {
+      return res.status(400).json({ ok: false, error: '日期格式应为 YYYY-MM-DD' });
+    }
+    const st = await storeDao.open({ readOnly: true });
+    const rows = await st.query('prediction', { where: { date: req.params.date } });
+    ok(res, rows.length ? rows[0].payload : null);
+  } catch (e) { fail(res, e); }
+});
+
+/** 判断力画像 */
+app.get('/api/judgment/stats', async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(365, Number(req.query.days) || 20));
+    const to = ds.todayStr();
+    const from = new Date(new Date(to + 'T00:00:00').getTime() - days * 86400000);
+    const p2 = (n) => String(n).padStart(2, '0');
+    const fromStr = `${from.getFullYear()}-${p2(from.getMonth() + 1)}-${p2(from.getDate())}`;
+    ok(res, await judgment.stats({ from: fromStr, to }));
+  } catch (e) { fail(res, e); }
+});
+
+/** 某个交易日的快照概要（宽度/涨停数） */
+app.get('/api/snapshot/summary', async (req, res) => {
+  try {
+    const date = req.query.date || (await ds.latestTradingDay()).date;
+    const s = await snapLib.readSummary(date);
+    if (!s) return ok(res, null);
+    ok(res, {
+      date: s.date, count: s.count, valid: s.valid,
+      breadth: s.breadth, strongRatioProxy: s.strongRatioProxy, ztCount: s.ztCount,
+    });
+  } catch (e) { fail(res, e); }
+});
+
+/** 健康检查：数据源 + 存储 + 待对账数 */
+app.get('/api/health', async (req, res) => {
+  try {
+    const storeInfo = await storeDao.info();
+    const dsHealth = await ds.health();
+    let pending = 0;
+    try {
+      const st = await storeDao.open({ readOnly: true });
+      const preds = await st.query('prediction', { order: 'date', desc: true, limit: 30 });
+      const recs = await st.query('reconcile', { order: 'date', desc: true, limit: 30 });
+      const done = new Set(recs.map((r) => r.date));
+      pending = preds.filter((p) => !done.has(p.date)).length;
+    } catch (e) { /* 读不到就报 null，不编 0 */ pending = null; }
+
+    ok(res, {
+      version: pkg.version,
+      storage: storeInfo,
+      sources: dsHealth,
+      pendingReconcile: pending,
+      uptimeSec: Math.round(process.uptime()),
+    });
+  } catch (e) { fail(res, e); }
+});
+
+/* 页面路由：/today 为新的默认入口，/ 保留原分析台（书签兼容，06 §1） */
+app.get('/today', (req, res) => res.sendFile(path.join(__dirname, 'public', 'today.html')));
+app.get('/watch', (req, res) => res.sendFile(path.join(__dirname, 'public', 'watch.html')));
+app.get('/lab', (req, res) => res.sendFile(path.join(__dirname, 'public', 'lab.html')));
+
 app.use('/api', (req, res) => res.status(404).json({ ok: false, error: '接口不存在' }));
 app.get('/screen', (req, res) => res.sendFile(path.join(__dirname, 'public', 'screen.html')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

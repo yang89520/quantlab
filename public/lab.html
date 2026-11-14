@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>策略实验室 · QuantLab</title>
+<link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/today.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到主内容</a>
+<header>
+  <div class="hd">
+    <div class="brand"><div class="logo" aria-hidden="true">QL</div><b>QuantLab</b></div>
+    <nav aria-label="主导航">
+      <a href="/today">今日一页</a>
+      <a href="/lab" aria-current="page">策略实验室</a>
+      <a href="/lab">策略实验室</a>
+      <a href="/" class="tool">分析台</a>
+      <a href="/screen" class="tool">选股器</a>
+    </nav>
+  </div>
+</header>
+<main id="main" class="today-wrap">
+  <div class="today-hd"><h1>策略实验室</h1><p>三期功能 · 尚未上线</p></div>
+  <div class="statusbar is-warn"><span class="dot" aria-hidden="true"></span>
+    <span>该页面是「策略是否可信」的验证台，按计划在三期实现</span></div>
+  <div class="cell" style="margin-bottom:12px">
+    <div class="cell-hd"><span class="idx" aria-hidden="true">·</span><h2>上线后将提供</h2></div>
+    <div class="invalid" style="background:rgba(107,165,255,.05);border-color:rgba(107,165,255,.2)">
+      <h3 class="sect-h" style="color:#6BA5FF">规格（docs/dev/06 §3）</h3>
+      <ul>
+        <li>五个 tab：策略列表 / 编辑器 / 验证 / 信号跟踪 / 批量回测</li>
+        <li>编辑器：粘贴通达信公式，输出线必须手选，未来函数扫描分三级</li>
+        <li>验证：五道闸用 ✓ ✗ ! — 四态，<b>无法检验 ≠ 通过</b></li>
+        <li>信号：每日信号 + T+1/T+5/T+10 跟踪，实盘与回测双曲线对比</li>
+      </ul>
+    </div>
+    <p class="delta"><span class="now">回测再好，实盘对不上就是有问题</span></p>
+  </div>
+  <p style="font-size:13px;color:#828FA5">当前可用的是一期闭环：<a href="/today" style="color:#6BA5FF">今日一页</a> 已接入真实数据。</p>
+</main>
+</body>
+</html>
