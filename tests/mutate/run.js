@@ -130,6 +130,36 @@ const MUTATIONS = [
     expectFail: ['PY_SELFTEST'],
     expectRed: ['未定义标识符 CLOES 抛错'],
   },
+
+  /* ---------------- 新增 4 条（二级缓存 / ⑤ 风险 / D3 时效） ---------------- */
+  {
+    name: '缓存不再校验日期（跨日照用旧值）', file: 'lib/cache.js', phase: '新增',
+    from: "    if (!obj || obj.day !== day || obj.value === undefined) return null;",
+    to: "    if (!obj || obj.value === undefined) return null;",
+    expectFail: ['unit/cache.test.js'],
+    expectRed: ['跨日必失效'],
+  },
+  {
+    name: '风险扫描不判减仓', file: 'lib/watchpool.js', phase: '新增',
+    from: '  if (chgPct != null && chgPct <= Number(u.reduceChgPct)) {',
+    to: '  if (false && chgPct != null) {',
+    expectFail: ['unit/phase2.test.js'],
+    expectRed: ['单日跌幅超阈值 → 减仓'],
+  },
+  {
+    name: 'K 线不足当成「没风险」而不是 null', file: 'lib/watchpool.js', phase: '新增',
+    from: '  const ind = indicators(bars);\n  if (!ind) return null;',
+    to: '  const ind = indicators(bars);\n  if (!ind) return { close: 0, chgPct: null, hits: [] };',
+    expectFail: ['unit/phase2.test.js'],
+    expectRed: ['K 线不足 21 根 → 返回 null'],
+  },
+  {
+    name: 'D3 时效判定写反（T-1 当当日用）', file: 'lib/datasource.js', phase: '新增',
+    from: '    const canLocal = dbMax && (!target || target <= dbMax);',
+    to: '    const canLocal = dbMax && (!target || target >= dbMax);',
+    expectFail: ['integration/datasource-rules.test.js'],
+    expectRed: ['D-4 请求今日'],
+  },
 ];
 
 function makeCopy() {
@@ -171,7 +201,7 @@ function runTest(tmp, rel) {
 }
 
 let failures = 0;
-let byPhase = { 一期: 0, 二期: 0, 三期: 0 };
+let byPhase = { 一期: 0, 二期: 0, 三期: 0, 新增: 0 };
 
 (async () => {
   console.log('L4 变异验证（改坏副本 → 断言必须红）\n');
@@ -209,7 +239,8 @@ let byPhase = { 一期: 0, 二期: 0, 三期: 0 };
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   }
-  console.log(`\n变异结果：一期 ${byPhase['一期'] || 0}/6、二期 ${byPhase['二期'] || 0}/5、三期 ${byPhase['三期'] || 0}/5`);
+  const TOTAL = { 一期: 6, 二期: 5, 三期: 5, 新增: 4 };
+  console.log('\n变异结果：' + Object.keys(TOTAL).map((k) => `${k} ${byPhase[k] || 0}/${TOTAL[k]}`).join('、'));
   if (failures) {
     console.log(`✗ ${failures} 条变异未通过（断言缺口或目标失效）`);
     process.exitCode = 1;

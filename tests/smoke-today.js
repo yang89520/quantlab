@@ -142,10 +142,29 @@ global.fetch = (path, opt) => nativeFetch(BASE + path, opt);
     assert.ok(html.includes('其余'), '中性未用「其余」兜底，情景可能有空洞');
   });
 
-  check('未上线的格子显示「需 X 功能」而不是 0', () => {
-    // 这三个格子在 HTML 里就是 nodata，JS 不应把它们变成有数据
-    ['cell-mainline', 'cell-timing', 'cell-watch'].forEach((id) => {
-      assert.ok(get(id).classList.contains('nodata'), id + ' 不该被赋数据');
+  // 06 §2.4：无数据必须说清「需 X 功能」且绝不显示 0；有数据则必须有真实结论
+  check('空态显示「需 X 功能」而不是 0，上线格必须有真实结论', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'today.html'), 'utf8');
+    const VERDICT_OF = {
+      'cell-mainline': 'main-verdict',
+      'cell-timing': 'timing-verdict',
+      'cell-watch': 'watch-verdict',
+      'cell-risk': 'risk-verdict',
+    };
+    Object.keys(VERDICT_OF).forEach((id) => {
+      const el = get(id);
+      const conclusion = String(get(VERDICT_OF[id]).firstChild.nodeValue || '').trim();
+      if (el.classList.contains('nodata')) {
+        // 空态文案在静态 HTML 里（DOM 桩读不到内部节点），按 section 起始位置定位
+        const m = html.match(new RegExp(`id="${id}"[\\s\\S]{0,1200}?nodata-body">([^<]*)<`));
+        assert.ok(m && /需/.test(m[1] || ''), id + ' 空态必须写明「需 X 功能」');
+        assert.ok(!/^0\b/.test(conclusion), id + ' 空态不得把缺失显示成 0');
+      } else {
+        assert.ok(el.classList.contains('is-live'), id + ' 有数据时必须标 is-live');
+        assert.ok(conclusion && conclusion !== '—', id + ' 有数据时结论不得为空');
+      }
     });
   });
 

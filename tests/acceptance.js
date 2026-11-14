@@ -69,7 +69,11 @@ function run(cmd, args, opts) {
   ok('A3', '今日一页渲染冒烟通过', t3.status === 0 && /渲染冒烟通过/.test(t3.stdout || ''));
   const t4 = run('npm', ['run', 'test:mutate']);
   const mutOut = t4.stdout || '';
-  ok('A4', '变异 16 条全红', t4.status === 0 && /一期 6\/6、二期 5\/5、三期 5\/5/.test(mutOut), mutOut.slice(-160));
+  ok('A4', '变异 20 条全红', t4.status === 0 && /一期 6\/6、二期 5\/5、三期 5\/5、新增 4\/4/.test(mutOut), mutOut.slice(-200));
+  const t5 = run(process.execPath, ['tests/integration/datasource-rules.test.js']);
+  const dsRules = (t5.stdout || '') + (t5.stderr || '');
+  ok('A5', '数据铁律专项全绿（D-3/D-4/D-5/D-7/D-8 真跑）',
+    t5.status === 0 && /8\/8 通过/.test(dsRules), dsRules.slice(-220));
 
   /* ---------- B. 数据规则（09 §9 / 07 §6.1） ---------- */
   console.log('\n【B 数据规则专项（优先级高于功能验收）】');
@@ -98,6 +102,16 @@ function run(cmd, args, opts) {
   ok('D-6', 'fixtures 不进生产代码', d6.length === 0, d6.slice(0, 2).join('\n      '));
   ok('D-7', '降级有标记（degraded 字段存在）',
     /degraded/.test(read('lib/sources/index.js')) && /degraded/.test(read('lib/sector.js')));
+
+  // D-4 是全套里最重要的一条：它防「拿 T-1 本地数据冒充当日」（09 §9）
+  ok('D-4', '当日不走本地库（夹具库 MAX=历史日 + 请求今日 → 走网络且 asOf=今日）',
+    /✓ D-4 请求今日（> 库内 MAX）必须走网络/.test(dsRules)
+    && /✓ D-4 请求历史日期（≤ 库内 MAX）走本地库/.test(dsRules),
+    dsRules.split('\n').filter((l) => /D-4/.test(l)).join('\n      '));
+  ok('D-5', '缺失返 null 不返 0（上游全失败 → rows 为空、level=null、asOf=null）',
+    /✓ D-5 本地与网络全失败/.test(dsRules)
+    && /✓ D-5 快照取不到/.test(dsRules),
+    dsRules.split('\n').filter((l) => /D-5/.test(l)).join('\n      '));
 
   // engine=jsonl 独立运行（在临时目录跑，不污染业务库）
   const jsonlProbe = run(process.execPath, ['-e', `
@@ -202,6 +216,38 @@ function run(cmd, args, opts) {
     && /--focus/.test(read('public/css/ql.css') + read('public/css/style.css')));
   ok('C22', '板块详情可点回原始值（metrics 表）',
     /amountPctile/.test(read('public/js/sector.js')) && /ret20/.test(read('public/js/sector.js')));
+
+  // C23：06 §5.3 / 07 §4.4「移动端 375px 七格结论 2 屏内」
+  // 只靠 CSS 收不起 ①⑤⑥⑦（它们原本没有折叠按钮），所以三处必须同时成立：
+  //   1) 七格各有一个 fold-toggle（结论始终可见，明细点开再看）
+  //   2) 移动端收起态用 :not(.verdict) 兜住所有非结论块，新增块不用再补选择器
+  //   3) JS 在窄屏下把七格全部置为 is-collapsed（而不是照着 HTML 静态 class 走）
+  const foldKeys = ['env', 'recon', 'mainline', 'timing', 'watch', 'risk', 'plan'];
+  const foldBtns = foldKeys.filter((k) => todayHtml.includes(`id="fold-btn-${k}"`));
+  const todayCss = read('public/css/today.css');
+  const styleCss = read('public/css/style.css');
+  const mobileCss = todayCss.slice(todayCss.indexOf('@media (max-width:767px)'));
+  ok('C23', '移动端 375px 七格结论 2 屏内（七格可折叠 + 窄屏全收起）',
+    foldBtns.length === 7
+    && foldKeys.every((k) => todayCss.includes(`fold-body`) && todayHtml.includes(`id="fold-${k}"`))
+    && /\.cell\.is-collapsed > \.real-body > :not\(\.verdict\)\{display:none\}/.test(mobileCss)
+    && /classList\.toggle\('is-collapsed', isMobile\)/.test(todayJs)
+    && /const FOLD_KEYS = \['env', 'recon', 'mainline', 'timing', 'watch', 'risk', 'plan'\]/.test(todayJs)
+    // 头部 .hd-right 不单独占行时会把文档撑出横向滚动条（分析台/选股器实测 16–47px）
+    && /\.hd-right\{flex:1 1 100%/.test(styleCss),
+    `折叠按钮 ${foldBtns.length}/7`);
+
+  // C24：03 §8 要求「/api/health 返回 lastPrediction 非空」。
+  // 这条同时守住两个坑：BigInt 序列化会让整个接口 500；DuckDB 的 TIMESTAMP
+  // 不是 JS Date，透传出去前端会拿到 {"micros":...}。
+  const hResp = await get('/api/health');
+  const hp = (hResp.body && hResp.body.data) || {};
+  const lp = hp.lastPrediction;
+  ok('C24', '/api/health 暴露 lastPrediction（cron 漏跑能看出来）',
+    hResp.status === 200 && !!lp && !!lp.date
+    && typeof lp.score === 'number'
+    && (lp.createdAt === null || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(lp.createdAt))),
+    `status=${hResp.status} lastPrediction=${JSON.stringify(lp)}`);
 
   // 加严：前端也在检查范围内（文档只要求 lib/，本项目把前端一并纳入）
   const allJs = jsFiles.concat(filesIn('public/js', '.js'));
