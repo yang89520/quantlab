@@ -168,11 +168,13 @@ const MUTATIONS = [
 |---|---|---|
 | A5 | 数据铁律专项 8/8（D-4 历史走本地 / D-4 今日走网络 / D-4 补到今天 / D-5 全失败不返 0 / D-3 留痕 / D-7 降级标记 / D-8 不写上游库） | `tests/acceptance.js` |
 | C23 | 移动端七格可折叠 + 窄屏全收起 + 无横向滚动条 | `tests/acceptance.js` |
+| C24 | `/api/health` 暴露 `lastPrediction`（含 BigInt/时间格式不炸） | `tests/acceptance.js` |
+| C25 | 下钻可返回原位置（五页都加载 nav-return，链接带 data-back） | `tests/acceptance.js` |
 | 二级缓存 8 项 | 跨日必失效、损坏返 null、`QL_NO_CACHE=1` 可关、`prune(keepDays)` | `tests/unit/cache.test.js` |
 | 风险扫描 6 项 | 破位 / 转弱 / 减仓 / 强势不误报 / K 线不足返 null / 阈值来自参数 | `tests/unit/phase2.test.js` |
 | 变异新增 4 条 | 缓存不校验日期、风险不判减仓、K 线不足当无风险、D3 判定写反 | `tests/mutate/run.js` |
 
-当前总数：验收 **46 通过 / 0 失败**，变异 **20/20 全红**（一期 6 + 二期 5 + 三期 5 + 新增 4）。
+当前总数：验收 **48 通过 / 0 失败**，变异 **20/20 全红**（一期 6 + 二期 5 + 三期 5 + 新增 4）。
 
 ---
 
