@@ -287,6 +287,19 @@ pre .c{color:#4E5C72} pre .k{color:#FF7A8A} pre .s{color:#8DD6A8} pre .f{color:#
   .main-nav a{padding:4px 7px}
 }
 
+/* 6b. 窄屏头部：.hd-right（导航 + 指标 + 评分环）单独占一行并横向滚动。
+   不这么处理时，它的 min-content 宽度（导航 277 + 评分 124）在 375px 下会把
+   整个文档撑出 47px 的横向滚动条 —— 分析台/选股器都会中招。 */
+@media (max-width:767px){
+  .hd{padding:10px 12px;gap:10px}
+  .hd-right{flex:1 1 100%;min-width:0;margin-left:0;gap:10px;
+    overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .hd-right::-webkit-scrollbar{display:none}
+  .hd-right>.main-nav{flex:0 0 auto;overflow:visible}
+  .hd-right>.score-wrap{flex:0 0 auto}
+  .score-txt .s{display:none}
+}
+
 /* 7. 字号下限：消除 9–10.5px 小字，正文最小 12px；11px 仅徽标 */
 .brand p,.stock .qual,.stock .cg small,.metric .k,.score-txt .s,
 .sec-t,.advice .n,.legend,.ins-period,.tip .dt,

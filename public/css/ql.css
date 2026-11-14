@@ -650,3 +650,16 @@ footer{max-width:1280px;margin:0 auto;padding:0 var(--sp-4) var(--sp-6)}
 /* 首日运行：对比区只显示占位，不隐藏整格（06 §7） */
 .cell.is-first .delta > *:not(.first-run){display:none}
 .cell.is-first .delta .first-run{display:inline-block}
+
+/* ---------- 27. 下钻返回（06 §5.2：返回原位置） ---------- */
+.ql-back{
+  position:fixed;right:var(--sp-4);bottom:var(--sp-4);z-index:60;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:10px 14px;min-height:40px;
+  font-size:var(--fs-sm);color:var(--tx);
+  background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-pill,999px);
+  text-decoration:none;box-shadow:0 6px 20px rgba(0,0,0,.28);
+}
+.ql-back:hover{background:var(--card3);border-color:var(--focus)}
+.ql-back:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+@media (max-width:520px){ .ql-back{right:12px;bottom:12px;padding:9px 12px} }

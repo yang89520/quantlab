@@ -1484,6 +1484,46 @@ window.QLMount = function (RAW, meta) {
     b.onclick = () => switchPeriod(b.dataset.period);
   });
 
+  /* ---------------- 加入观察池（02 §0：S7 写入方 = Web） ----------------
+     评分复用本页已挂载的 composite()，不另算一套（04 §4.2）。
+     composite.total 取值 -100~100，入池门槛 minScore=70 是 0~100 口径，
+     所以这里做线性归一化，并把原始值一并写入 entryReason，保证可追溯（D4）。 */
+  const btnPool = document.getElementById('btnPool');
+  if (btnPool) {
+    btnPool.onclick = async () => {
+      const old = btnPool.textContent;
+      btnPool.disabled = true;
+      btnPool.textContent = '提交中…';
+      try {
+        if (!meta || !meta.code) throw new Error('当前没有选中标的');
+        const comp = composite();
+        if (comp.total == null) throw new Error(`K 线仅 ${comp.bars} 根，综合评分不足 30 根门槛，暂不能入池`);
+        const poolScore = Math.round((Number(comp.total) + 100) / 2);
+        const r = await fetch('/api/watchpool', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: meta.code,
+            name: meta.name,
+            score: poolScore,
+            entryReason: `分析台入池 · 综合评分 ${Number(comp.total).toFixed(1)}（归一 ${poolScore}/100）· 置信 ${comp.conf}%`,
+          }),
+        });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || '入池失败');
+        btnPool.classList.add('on');
+        btnPool.textContent = '★ 已在观察池';
+        btnPool.title = `已入池 ${j.data.code}｜板块 ${j.data.sector || '—'}（${j.data.state}）`;
+      } catch (e) {
+        btnPool.textContent = old;
+        btnPool.title = '入池失败：' + e.message;
+        alert('入池失败：' + e.message);
+      } finally {
+        btnPool.disabled = false;
+      }
+    };
+  }
+
   // 依赖日线制度 / 个股制度的流派：在周月线或指数上置灰并说明原因
   function syncDayOnlyTabs() {
     document.querySelectorAll('.tab').forEach(t => {

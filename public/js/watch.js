@@ -128,13 +128,15 @@
   function sectorChip(code) {
     if (code === null || code === undefined || code === '') return '<b>—</b>';
     const info = state.sectorMap[String(code)];
+    // 板块徽标点跳板块详情（06 §5.2 下钻映射）
+    const href = '/sector/' + encodeURIComponent(String(code));
     if (info) {
       const g = info.grade;
       const cls = (g === 'A' ? 'chip-a' : g === 'B' ? 'chip-b' : g === 'C' ? 'chip-c' : g === 'D' ? 'chip-d' : 'chip-c');
-      return '<span class="chip ' + cls + '" style="margin:0">'
-        + esc(info.name || code) + (g ? ' · ' + esc(g) : '') + '</span>';
+      return '<a class="chip ' + cls + '" style="margin:0;text-decoration:none" data-back="watch" href="' + href + '">'
+        + esc(info.name || code) + (g ? ' · ' + esc(g) : '') + '</a>';
     }
-    return '<b>' + esc(code) + '</b>';
+    return '<a data-back="watch" href="' + href + '"><b>' + esc(code) + '</b></a>';
   }
 
   /* ---------------- 计数 / tabs / 计数条 ---------------- */
@@ -196,8 +198,10 @@
     return '<div class="empty-state">'
       + '<div class="es-ico" aria-hidden="true">◎</div>'
       + '<h2>观察池还是空的</h2>'
-      + '<p>当板块强度榜单出现 A / B 档板块，且个股综合评分达到入池门槛时，标的会进入这里。'
+      + '<p>入池入口在<b>分析台</b>（<code>/?code=600986</code>）：选中标的点「★ 加入观察池」，'
+      + '系统会用该股综合评分与所属板块档位判定（要求板块 A / B 档且评分达门槛）。'
       + '入池后的状态流转、失效条件与移出原因都会被记录，用来复盘判断力。</p>'
+      + '<p><a class="btn" href="/today">← 回今日一页</a> <a class="btn" href="/">去分析台</a></p>'
       + '</div>';
   }
 
@@ -225,7 +229,10 @@
     meta.push('<span>入池理由：<b>' + esc(e.entryReason || '—') + '</b></span>');
     meta.push('<span>板块：' + sectorChip(e.sector) + '</span>');
     meta.push('<span>停留：' + stayHTML(e) + '</span>');
-    if (isNum(e.score)) meta.push('<span>评分：<b>' + esc(String(Number(e.score))) + '</b></span>');
+    if (isNum(e.score)) {
+      meta.push('<span>评分：<a data-back="watch" href="/?code=' + encodeURIComponent(String(e.code)) + '">'
+        + '<b>' + esc(String(Number(e.score))) + '</b></a></span>');
+    }
     meta.push('<span>备注：<b>' + esc(e.note && String(e.note).trim() ? String(e.note) : '—') + '</b></span>');
     if (removed) {
       meta.push('<span>移出原因：<b>' + esc(reasonLabel(e.removeReason)) + '</b></span>');
@@ -235,7 +242,8 @@
     }
     return '<div class="row" data-code="' + esc(e.code) + '" role="listitem">'
       + '<div class="r-main">'
-      + '<span class="r-code num">' + esc(e.code) + '</span>'
+      + '<span class="r-code num"><a data-back="watch" href="/?code=' + encodeURIComponent(String(e.code)) + '">'
+      + esc(e.code) + '</a></span>'
       + '<span class="r-name">' + esc(e.name || '—') + '</span>'
       + '<span class="st ' + si.cls + '">' + esc(si.label) + '</span>'
       + '</div>'
@@ -749,6 +757,16 @@
       const qs = new URLSearchParams(location.search).get('state');
       if (qs && FILTERS.some(function (f) { return f.key === qs; })) state.filter = qs;
     } catch (e) { console.warn('[watch] URL 参数解析失败', e); }
+
+    // 下钻返回原位置（06 §5.2）：把筛选状态交给导航层保存/还原
+    window.QLPageState = function () { return { filter: state.filter }; };
+    window.QLApplyState = function (s) {
+      if (!s || typeof s.filter !== 'string') return;
+      if (!FILTERS.some(function (f) { return f.key === s.filter; })) return;
+      state.filter = s.filter;
+      if (state.data) renderAll();       // 已有数据就立即按还原的筛选重绘
+    };
+
     boot();
   }
 

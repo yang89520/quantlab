@@ -847,7 +847,19 @@
       var tr = document.createElement('tr');
       tr.appendChild(el('td', 'muted', r.date));
       tr.appendChild(el('td', '', r.strategyId || '—'));
-      tr.appendChild(el('td', 'strong', r.code || '—'));
+      // 信号代码点跳分析台（06 §5.2 下钻映射），data-back 让返回时保留 tab 与筛选
+      var codeTd = document.createElement('td');
+      codeTd.className = 'strong';
+      if (/^\d{6}$/.test(String(r.code || ''))) {
+        var a = document.createElement('a');
+        a.href = '/?code=' + encodeURIComponent(String(r.code));
+        a.setAttribute('data-back', 'lab');
+        a.textContent = String(r.code);
+        codeTd.appendChild(a);
+      } else {
+        codeTd.textContent = r.code || '—';
+      }
+      tr.appendChild(codeTd);
       tr.appendChild(el('td', '', ACTION_CN[r.action] || r.action || '—'));
       tr.appendChild(el('td', 'r', num(r.price, 2)));
       ['t1', 't5', 't10'].forEach(function (k) {
@@ -1039,6 +1051,26 @@
     $('sig-date').value = localDateStr();
     guard(loadHealth);
     selectTab(0, false);
+
+    // 下钻返回原位置（06 §5.2）：记住当前 tab 与信号筛选，回来时还原
+    window.QLPageState = function () {
+      var t = document.querySelector('[role="tab"][aria-selected="true"]');
+      return {
+        tab: t ? t.id : null,
+        sigFrom: $('sig-from') ? $('sig-from').value : null,
+        sigTo: $('sig-to') ? $('sig-to').value : null,
+        strategy: $('sig-strategy') ? $('sig-strategy').value : null,
+      };
+    };
+    window.QLApplyState = function (s) {
+      if (!s) return;
+      if ($('sig-from') && s.sigFrom) $('sig-from').value = s.sigFrom;
+      if ($('sig-to') && s.sigTo) $('sig-to').value = s.sigTo;
+      if (s.tab) {
+        var btn = document.getElementById(s.tab);
+        if (btn) btn.click();            // 走页面自己的 tab 切换逻辑，不绕过
+      }
+    };
   }
   boot();
 })();

@@ -30,7 +30,6 @@
   };
   const GRADE_CN = { A: '主攻', B: '蓄势', C: '修复', D: '退潮' };
   const STATE_CN = { watching: '待观察', ambush: '埋伏', confirmed: '启动确认', holding: '持有', removed: '已移出' };
-  const DIR_CN = { up: '看多', down: '看空', dn: '看空', flat: '中性' };
 
   const fmtPct = (v, d = 2) => (v === null || v === undefined ? '—' : (v > 0 ? '+' : '') + Number(v).toFixed(d) + '%');
   // HTML 文本转义；任何 API 字符串进 innerHTML 前必须过这里
@@ -61,13 +60,15 @@
   // 首日「首次运行」对比区
   const firstRun = (why) => `<span class="first-run">首次运行 · ${esc(why)}</span>`;
 
-  // ③/⑥ 与昨日对比：用 /api/judgment/stats 的 recent
-  function recentCompare(recent, why) {
-    if (!isArr(recent) || !recent.length) return firstRun(why);
-    const seq = recent.map((x) => `<span class="${x === 'hit' ? 'ok' : 'no'}">${x === 'hit' ? '✓' : '✗'}</span>`).join(' ');
-    const n = recent.filter((x) => x === 'hit').length;
-    return `<span>近 ${recent.length} 日</span><span class="now">${n} 中</span>`
-      + `<span class="recent-seq">${seq}</span>`;
+  // 是否存在熔断/降级的数据资产（只用于状态条提示；数据源健康明细在 /lab）
+  function hasTrippedAsset(health) {
+    const h = health || {};
+    const assets = (h.sources && h.sources.assets) || {};
+    return Object.keys(assets).some((key) => {
+      const a = assets[key] || {};
+      if (isArr(a.tripped) && a.tripped.length) return true;
+      return (isArr(a.sources) ? a.sources : []).some((s) => s && (s.state === 'down' || s.trippedUntil));
+    });
   }
 
   /* ---------------- 顶部状态条 ---------------- */
@@ -222,7 +223,7 @@
         const deg = s.degraded === true ? '<span class="deg-tag">资金数据缺失</span>' : '';
         return `<li><span class="rank">#${i + 1}</span>`
           + `<b class="gr gr-${esc(grade)}" title="${esc(grade + ' ' + gcn)}" aria-label="${esc(grade + ' ' + gcn)}">${esc(grade)}</b>`
-          + `<a href="/sector/${code}">${esc(s.name == null ? '—' : s.name)}</a>`
+          + `<a data-back="today" href="/sector/${code}">${esc(s.name == null ? '—' : s.name)}</a>`
           + `<span class="sc">${esc(score)}</span>${deg}</li>`;
       }).join('');
       return `<div class="board"><h4>${esc(title)}</h4><ol>${rows || '<li class="empty">—</li>'}</ol></div>`;
@@ -251,167 +252,218 @@
     $('main-delta').innerHTML = firstRun('没有昨日 A 档名单可对比');
   }
 
-  /* ---------------- ③ 时机（判断型） ---------------- */
+  /* ---------------- ③ 时机：今日触发的策略信号（判断型，06 §2.3 ③） ---------------- */
 
-  function renderTiming(wp, stats) {
+  /**
+   * @param {object} ctx { date, signals, strategies, tracks, ui }
+   *   signals    /api/lab/signals 的 {date,list}
+   *   strategies /api/lab/strategies 的 {total,list}
+   *   tracks     [{strategyId, liveWinRate, sample}]
+   */
+  function renderTiming(ctx) {
     const cell = $('cell-timing');
-    const groups = wp && wp.groups;
-    // 拿不到观察池 → 保留 nodata「需三期功能」空态
-    if (!groups) return;
+    const strategies = ctx && ctx.strategies;
+    const active = strategies && isArr(strategies.list)
+      ? strategies.list.filter((s) => s.status === 'active' || s.status === 'suspect')
+      : null;
+
+    // 三期没有任何在用策略 → 空态「需策略实验室就绪」，绝不显示 0（06 §2.3 ③）
+    if (!active || !active.length) {
+      cell.classList.add('nodata');
+      cell.classList.remove('is-live');
+      $('timing-verdict').firstChild.nodeValue = '需策略实验室就绪';
+      $('timing-sub').textContent = '还没有在用策略，无法产生买卖信号';
+      $('timing-evid').innerHTML = '<li><a href="/lab">去策略实验室新建策略</a></li>';
+      $('timing-invalid').hidden = true;
+      $('timing-invalid-list').innerHTML = '';
+      $('timing-delta').innerHTML = firstRun('没有历史信号可对比');
+      return;
+    }
+
+    cell.classList.remove('nodata');
     cell.classList.add('is-live');
 
-    // 四态真实数量，不写死
-    const keys = ['watching', 'ambush', 'confirmed', 'holding'];
-    const counts = keys.map((k) => ({ k, label: STATE_CN[k], n: isArr(groups[k]) ? groups[k].length : 0 }));
-    const total = counts.reduce((s, x) => s + x.n, 0);
-    const max = counts.reduce((a, b) => (b.n > a.n ? b : a), counts[0]);
+    const list = (ctx.signals && isArr(ctx.signals.list)) ? ctx.signals.list : [];
+    const nameOf = {};
+    active.forEach((s) => { nameOf[s.id] = s.name || s.id; });
+    const n = list.length;
+    const scanned = list.reduce((a, x) => (x.scanned != null && Number(x.scanned) > a ? Number(x.scanned) : a), 0);
 
     const chip = $('chip-timing');
     chip.className = 'chip chip-fact';
-    chip.textContent = `池内 ${total}`;
+    chip.textContent = `信号 ${n}`;
 
-    // 结论按最大状态给出一句人读判断
-    $('timing-verdict').firstChild.nodeValue = total === 0
-      ? '池内暂无标的，先积累观察'
-      : `「${max.label}」${max.n} 只最多，节奏以${max.label}为主`;
-    $('timing-sub').textContent = `四态合计 ${total} 只 · 池上限 ${wp.maxSize == null ? '—' : wp.maxSize} 只`;
+    // 策略确实跑过，所以 0 是有效值，不是缺数据
+    $('timing-verdict').firstChild.nodeValue = n ? `今日触发信号 ${n} 只` : '今日无买卖信号';
+    $('timing-sub').textContent = `${active.length} 个在用策略`
+      + (scanned ? ` · 预筛后扫描 ${scanned} 只` : '');
 
-    // 证据（≤3 条，可点跳 /watch?state=）
-    const link = (x) => `<a href="/watch?state=${encodeURIComponent(x.k)}">${esc(x.label)} ${x.n} 只</a>`;
-    $('timing-evid').innerHTML =
-      `<li>${link(counts[0])}</li>`
-      + `<li>${link(counts[1])}</li>`
-      + `<li>${link(counts[2])} · ${link(counts[3])}</li>`;
+    // 证据：代表最多 3 只，可点进分析台（06 §5.2 下钻）
+    $('timing-evid').innerHTML = n
+      ? list.slice(0, 3).map((x) => {
+        const code = hrefCode(x.code);
+        const label = nameOf[x.strategyId] || x.strategyId || '—';
+        const act = x.action === 'buy' ? '买入信号' : (x.action || '—');
+        return `<li><a href="/?code=${code}" data-back="today">${esc(x.code)}</a>`
+          + `<span class="dir">${esc(act)}</span>`
+          + `<span class="why">${esc(label)} · 收盘 ${esc(x.price == null ? '—' : x.price)}</span></li>`;
+      }).join('')
+      : `<li><span class="why">${active.length} 个在用策略今日均未触发，属正常结果</span></li>`;
 
-    // 失效条件：config 未取到就写默认一条，但必须显示一条
+    // 失效条件：阈值来自 config（ui.timing.lowOpenPct），前端不写死数字
+    const lowOpen = ctx.ui && ctx.ui.timing && ctx.ui.timing.lowOpenPct != null
+      ? (Number(ctx.ui.timing.lowOpenPct) * 100).toFixed(0) + '%'
+      : null;
     $('timing-invalid').hidden = false;
-    $('timing-invalid-list').innerHTML = '<li>池内标的触发放量跌破 MA20（默认失效条件，未取到 config）</li>';
+    $('timing-invalid-list').innerHTML = lowOpen
+      ? `<li>信号标的次日多数低开 &gt;${esc(lowOpen)}</li>`
+      : '<li>失效条件阈值未配置（config.ui.timing.lowOpenPct），无法给出可证伪条件</li>';
 
-    $('timing-delta').innerHTML = recentCompare(stats && stats.recent, '没有昨日信号数据可对比');
+    // 对比：已回填的实盘命中率（T+1/T+5/T+10）
+    const tracks = isArr(ctx.tracks) ? ctx.tracks.filter((t) => t && Number(t.sample) > 0) : [];
+    if (!tracks.length) {
+      $('timing-delta').innerHTML = firstRun('信号还没有回填记录');
+    } else {
+      const sample = tracks.reduce((a, t) => a + Number(t.sample || 0), 0);
+      const hits = tracks.reduce((a, t) => a + Number(t.liveWinRate || 0) * Number(t.sample || 0), 0);
+      const rate = sample ? (hits / sample * 100).toFixed(1) + '%' : '—';
+      $('timing-delta').innerHTML = `<span>已回填 ${sample} 条</span>`
+        + `<span class="now">T+N 命中率 ${esc(rate)}</span>`;
+    }
   }
 
-  /* ---------------- ④ 候选（判断型） ---------------- */
+  /* ---------------- ④ 候选：观察池今日新增/晋级/淘汰（判断型，06 §2.3 ④） ---------------- */
 
-  function renderWatch(pred, summary) {
+  function renderWatch(ctx) {
     const cell = $('cell-watch');
-    const cs = pred && isArr(pred.candidates) ? pred.candidates : null;
-    if (!cs) return;
+    const wp = ctx && ctx.wp;
+    if (!wp) return;
+    cell.classList.remove('nodata');
     cell.classList.add('is-live');
 
-    const n = cs.length;
-    const ups = cs.filter((c) => c.dir === 'up').length;
+    const maxPer = ctx.ui && ctx.ui.candidate && ctx.ui.candidate.maxPerGroup != null
+      ? Number(ctx.ui.candidate.maxPerGroup) : 2;
+    const today = String(ctx.date || '').replace(/-/g, '');
+    const all = isArr(ctx.transitions) ? ctx.transitions : [];
+
+    // 按 id 里的交易日切分（tr_YYYYMMDD_...），不受进程时区影响
+    const ofDay = (d) => all.filter((t) => String(t.id || '').slice(3, 11) === d);
+    const todayTr = ofDay(today);
+
+    const added = todayTr.filter((t) => t.to === 'watching' && !t.from);
+    const promoted = todayTr.filter((t) => t.from && t.from !== 'removed'
+      && ['ambush', 'confirmed', 'holding'].indexOf(t.to) >= 0);
+    const dropped = todayTr.filter((t) => t.to === 'removed');
+
+    const groups = wp.groups || {};
+    const active = Object.keys(groups).reduce(
+      (a, k) => (k === 'removed' ? a : a + (isArr(groups[k]) ? groups[k].length : 0)), 0);
+
     const chip = $('chip-watch');
     chip.className = 'chip chip-fact';
-    chip.textContent = `候选 ${n}`;
+    chip.textContent = `池内 ${active}`;
 
-    $('watch-verdict').firstChild.nodeValue = n ? `候选 ${n} 只` : '今日无候选';
-    $('watch-sub').textContent = n ? `看多 ${ups} 只 · 点代码进分析台` : '观察池今日无入选标的';
+    $('watch-verdict').firstChild.nodeValue =
+      `新增 ${added.length} · 晋级 ${promoted.length} · 淘汰 ${dropped.length}`;
+    $('watch-sub').textContent = `池内 ${active} 只 · 上限 ${wp.maxSize == null ? '—' : wp.maxSize} 只`;
 
-    // 全部候选：真实代码/名称/方向/理由，可点跳 /?code=
-    $('watch-list').innerHTML = n
-      ? cs.map((c) => {
-          const code = hrefCode(c.code);
-          const dir = esc(DIR_CN[c.dir] || c.dir || '—');
-          return `<li><a href="/?code=${code}">${esc(c.code == null ? '—' : c.code)} ${esc(c.name == null ? '—' : c.name)}</a>`
-            + `<span class="dir">${dir}</span><span class="why">${esc(c.reason || '—')}</span></li>`;
-        }).join('')
-      : '<li class="empty">— 暂无候选 —</li>';
+    // 每类最多 maxPerGroup 只，带当前状态（06 §2.3 ④）
+    const row = (t, cls) => {
+      const code = hrefCode(t.code);
+      return `<li><a href="/?code=${code}" data-back="today">${esc(t.code)}</a>`
+        + `<span class="dir ${esc(cls)}">${esc(STATE_CN[t.to] || t.to || '—')}</span>`
+        + `<span class="why">${esc(t.trigger || '—')}</span></li>`;
+    };
+    const blocks = [];
+    if (added.length) blocks.push(added.slice(0, maxPer).map((t) => row(t, 'up')).join(''));
+    if (promoted.length) blocks.push(promoted.slice(0, maxPer).map((t) => row(t, 'warn')).join(''));
+    if (dropped.length) blocks.push(dropped.slice(0, maxPer).map((t) => row(t, 'down')).join(''));
+    $('watch-list').innerHTML = blocks.length
+      ? blocks.join('')
+      : `<li class="empty">— 今日观察池无迁移${active ? `（池内 ${active} 只静默持有）` : '（池内为空）'} —</li>`;
 
-    // 证据（≤3 条）：用 /api/snapshot/summary 补充当日宽度与涨停数
-    const s = summary || {};
-    const breadth = s.breadth == null ? '—' : (s.breadth * 100).toFixed(1) + '%';
-    const zt = s.ztCount == null ? '—' : s.ztCount + ' 只';
-    const valid = s.valid == null ? '—' : s.valid + ' 只';
+    // 证据：三类计数，全部可点跳 /watch（06 §5.2）
     $('watch-evid').innerHTML =
-      `<li><a href="/screen">当日宽度 <b>${esc(breadth)}</b></a>（快照）</li>`
-      + `<li><a href="/screen">涨停 <b>${esc(zt)}</b> · 有效 <b>${esc(valid)}</b></a></li>`
-      + `<li><a href="/watch">候选共 ${n} 只 · 到观察池核对</a></li>`;
+      `<li><a href="/watch?state=watching">新增 ${added.length} 只</a></li>`
+      + `<li><a href="/watch?state=confirmed">晋级 ${promoted.length} 只</a></li>`
+      + `<li><a href="/watch?state=removed">淘汰 ${dropped.length} 只</a></li>`;
 
-    // 失效条件 C1
-    const first = cs.find((c) => isArr(c.invalidIf) && c.invalidIf.length);
-    const c1 = first ? first.invalidIf : [];
+    // 失效条件：窗口来自 config.ui.candidate.startWindowDays
+    const win = ctx.ui && ctx.ui.candidate && ctx.ui.candidate.startWindowDays;
     $('watch-invalid').hidden = false;
-    $('watch-invalid-list').innerHTML = c1.length
-      ? c1.map((x) => `<li>${esc(x.id || '')} ${esc(x.desc || '')}</li>`).join('')
-      : '<li style="color:var(--up2)">缺失失效条件（后端异常，请重跑预判）</li>';
+    $('watch-invalid-list').innerHTML = win == null
+      ? '<li>失效条件阈值未配置（config.ui.candidate.startWindowDays）</li>'
+      : `<li>入池后 ${esc(win)} 个交易日内未启动则降级</li>`;
 
-    $('watch-delta').innerHTML = firstRun('没有昨日候选名单可对比');
+    // 对比：上一交易日的迁移情况
+    const days = Array.from(new Set(all.map((t) => String(t.id || '').slice(3, 11))))
+      .filter((d) => d && d !== today).sort();
+    const prevDay = days.length ? days[days.length - 1] : null;
+    if (!prevDay) {
+      $('watch-delta').innerHTML = firstRun('没有更早的迁移记录');
+    } else {
+      const p = ofDay(prevDay);
+      const pProm = p.filter((t) => t.from && t.from !== 'removed'
+        && ['ambush', 'confirmed', 'holding'].indexOf(t.to) >= 0).length;
+      const d = `${prevDay.slice(0, 4)}-${prevDay.slice(4, 6)}-${prevDay.slice(6, 8)}`;
+      $('watch-delta').innerHTML = `<span>${esc(d)}</span>`
+        + `<span class="now">晋级 ${pProm} 只</span>`
+        + `<span>新增 ${p.filter((t) => t.to === 'watching' && !t.from).length} · 淘汰 ${p.filter((t) => t.to === 'removed').length}</span>`;
+    }
   }
 
-  /* ---------------- ⑤ 风险（陈述型 · 不设失效条件） ---------------- */
+  /* ---------------- ⑤ 风险（陈述型 · 只报事实，不设失效条件，06 §2.3 ⑤） ---------------- */
 
-  // 是否存在熔断/降级的数据资产（供状态条"部分数据源降级"提示）
-  function hasTrippedAsset(health) {
-    const h = health || {};
-    const assets = (h.sources && h.sources.assets) || {};
-    return Object.keys(assets).some((key) => {
-      const a = assets[key] || {};
-      if (isArr(a.tripped) && a.tripped.length) return true;
-      return (isArr(a.sources) ? a.sources : []).some((s) => s && (s.state === 'down' || s.trippedUntil));
-    });
-  }
-
-  // 逐条收集真实风险，绝不填假风险
-  function collectRisks(health, sector) {
-    const out = [];
-    const h = health || {};
-    const assets = (h.sources && h.sources.assets) || {};
-    Object.keys(assets).forEach((key) => {
-      const a = assets[key] || {};
-      const tripped = isArr(a.tripped) ? a.tripped : [];
-      if (tripped.length) out.push({ t: `数据资产熔断：${key}`, d: `熔断源 ${tripped.join('、')}` });
-      (isArr(a.sources) ? a.sources : []).forEach((s) => {
-        if (s && (s.state === 'down' || s.trippedUntil)) {
-          out.push({
-            t: `数据源熔断：${key} / ${s.name}`,
-            d: `state=${s.state || '—'} · fail=${s.fail == null ? '—' : s.fail} · ${s.lastError || ''}`,
-          });
-        }
-      });
-      if (a.state === 'degraded') {
-        out.push({ t: `数据资产降级：${key}`, d: `state=${a.state} · active=${a.active || 'none'}` });
-      }
-    });
-    if (h.storage && h.storage.degraded) {
-      out.push({ t: '存储引擎降级', d: `engine=${h.storage.engine || '—'} · wanted=${h.storage.wanted || '—'} · lastError=${h.storage.lastError || '—'}` });
-    }
-    if (h.python && h.python.available === false) {
-      out.push({ t: 'Python 引擎不可用', d: h.python.reason || 'numpy 不可用' });
-    }
-    const mdb = h.sources && h.sources.marketDb;
-    if (mdb && mdb.readable === false) {
-      out.push({ t: '行情库不可读', d: `exists=${mdb.exists} · lastError=${mdb.lastError || '—'}` });
-    }
-    if (sector && typeof sector.degradedCount === 'number' && sector.degradedCount > 0) {
-      out.push({ t: `板块资金数据降级 ${sector.degradedCount} 个`, d: sector.footnote || '资金分位缺失' });
-    }
-    return out;
-  }
-
-  function renderRisk(health, sector) {
+  function renderRisk(ctx) {
     const cell = $('cell-risk');
-    if (!health) return; // 拿不到 → 保留 nodata 空态
+    const r = ctx && ctx.risk;
+    if (!r) return; // 拿不到 → 保留 nodata 空态
+    cell.classList.remove('nodata');
     cell.classList.add('is-live');
 
-    const risks = collectRisks(health, sector);
+    const holding = Number(r.holding || 0);
+    const risky = Number(r.risky || 0);
+    const th = r.thresholds || {};
+
     const chip = $('chip-risk');
-    if (risks.length) {
-      chip.className = 'chip chip-wait';
-      chip.textContent = `${risks.length} 条风险`;
-    } else {
-      chip.className = 'chip chip-fact';
-      chip.textContent = '无已知风险';
+    chip.className = risky ? 'chip chip-wait' : 'chip chip-fact';
+    chip.textContent = holding ? `${risky}/${holding} 只` : '无持仓';
+
+    // 0 只持仓是有效事实，不是缺数据；但要说清楚「为什么是 0」
+    $('risk-verdict').firstChild.nodeValue = holding
+      ? `持仓 ${holding} 只，其中 ${risky} 只触发风险信号`
+      : '持仓 0 只，无风险信号';
+    $('risk-sub').textContent = holding
+      ? `口径：破位 MA${th.breakMa == null ? '—' : th.breakMa} · 转弱 MA${th.weakenMa == null ? '—' : th.weakenMa} · 减仓 ≤ ${th.reduceChgPct == null ? '—' : th.reduceChgPct}%`
+      : '观察池尚无「持有」状态标的';
+
+    const items = isArr(r.items) ? r.items : [];
+    const rowsHtml = items.slice(0, 3).map((x) => {
+      const code = hrefCode(x.code);
+      const hits = (x.hits || []).map((h) => `${h.k}（${h.v}）`).join(' · ');
+      return `<li><a href="/?code=${code}" data-back="today">${esc(x.code)} ${esc(x.name || '')}</a>`
+        + `<span class="why">${esc(hits)}</span></li>`;
+    }).join('');
+
+    $('risk-evid').innerHTML = rowsHtml
+      || `<li><span class="why">${holding ? '无标的触发破位/转弱/减仓' : '没有持仓标的可扫描'}</span></li>`;
+
+    // 证据不足要如实说：拿不到 K 线的标的不能当成「没风险」（D1）
+    if (isArr(r.missing) && r.missing.length) {
+      $('risk-evid').innerHTML += `<li><span class="why">${r.missing.length} 只缺 K 线数据，未纳入判定：`
+        + `${esc(r.missing.slice(0, 5).join('、'))}${r.missing.length > 5 ? ' 等' : ''}</span></li>`;
     }
 
-    $('risk-verdict').firstChild.nodeValue = risks.length ? `发现 ${risks.length} 条数据风险` : '无已知数据风险';
-    $('risk-sub').textContent = risks.length
-      ? '以下均为 /api/health、/api/sector/strength 的真实降级项'
-      : '存储 / Python / 行情库 / 数据源 / 板块均正常';
-    $('risk-evid').innerHTML = risks.length
-      ? risks.map((r) => `<li><span class="rk"><a href="/lab">${esc(r.t)}</a></span><span class="rd">${esc(r.d)}</span></li>`).join('')
-      : '<li><span class="rk">全部正常</span><span class="rd"><a href="/lab">查看数据源健康</a></span></li>';
-
-    $('risk-delta').innerHTML = firstRun('没有昨日风险快照可对比');
+    // 对比：昨日风险数 → 今日（来自 meta 留痕；没有就说没有）
+    const prev = r.prev;
+    if (!prev) {
+      $('risk-delta').innerHTML = firstRun('没有更早的风险留痕');
+    } else {
+      const pc = Number(prev.risky || 0);
+      const dir = risky === pc ? '持平' : (risky > pc ? `增加 ${risky - pc}` : `减少 ${pc - risky}`);
+      $('risk-delta').innerHTML = `<span>${esc(prev.date)}</span>`
+        + `<span>风险 ${pc} 只</span><span class="now">${esc(dir)}</span>`;
+    }
   }
 
   /* ---------------- ⑥ 对账（陈述型） ---------------- */
@@ -531,26 +583,34 @@
     $('plan-delta').innerHTML = firstRun('明日收盘后可核对落在哪一格');
   }
 
-  /* ---------------- 移动端 ②③④ 折叠 ---------------- */
+  /* ---------------- 移动端七格折叠（06 §5.3 / 07 §4.4） ----------------
+     手机上必须 2 屏看完七格结论。做法：窄屏下七格**默认全部收起**，
+     每格只留「序号 + 标题 + 徽标 + 结论」，证据/失效条件/变化量收进 .fold-body，
+     点「展开」再看。桌面端相反：全部展开，折叠按钮隐藏（CSS 控制）。 */
+
+  const FOLD_KEYS = ['env', 'recon', 'mainline', 'timing', 'watch', 'risk', 'plan'];
 
   function setupFolds() {
-    const isMobile = typeof window.matchMedia === 'function'
-      && window.matchMedia('(max-width: 767px)').matches;
-    ['mainline', 'timing', 'watch'].forEach((k) => {
+    const mq = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 767px)') : null;
+    const isMobile = !!(mq && mq.matches);
+
+    FOLD_KEYS.forEach((k) => {
       const cell = $('cell-' + k);
       const btn = $('fold-btn-' + k);
-      if (!cell || !btn) return;
-      // 桌面端一律展开；移动端按 HTML 默认（② 展开、③④ 折叠）
-      if (!isMobile) cell.classList.remove('is-collapsed');
+      if (!cell) return;
+      // 移动端默认收起；桌面端一律展开
+      cell.classList.toggle('is-collapsed', isMobile);
+      if (!btn) return;
       const sync = () => {
         const collapsed = cell.classList.contains('is-collapsed');
         btn.setAttribute('aria-expanded', String(!collapsed));
         btn.textContent = collapsed ? '展开' : '收起';
+        cell.classList.toggle('is-expanded', !collapsed);
       };
       sync();
       btn.addEventListener('click', () => {
-        const now = !cell.classList.contains('is-collapsed');
-        cell.classList.toggle('is-collapsed', now);
+        cell.classList.toggle('is-collapsed');
         sync();
       });
     });
@@ -580,13 +640,30 @@
       return;
     }
 
-    const [stats, health, sector, wp, summary] = await Promise.all([
+    const [stats, health, sector, wp, ui, strat, trans, risk] = await Promise.all([
       safe('/api/judgment/stats?days=20'),
       safe('/api/health'),
       safe('/api/sector/strength'),
       safe('/api/watchpool'),
-      safe('/api/snapshot/summary'),
+      safe('/api/ui/config'),
+      safe('/api/lab/strategies'),
+      safe('/api/watchpool/transitions'),
+      safe('/api/watchpool/risk'),
     ]);
+
+    // ③ 时机格依赖当日信号与各策略的实盘回填，按预判日取（不是自然日）
+    let signals = null;
+    let tracks = null;
+    if (pred && pred.date) {
+      signals = await safe(`/api/lab/signals?date=${encodeURIComponent(pred.date)}`);
+      const active = strat && isArr(strat.list)
+        ? strat.list.filter((s) => s.status === 'active' || s.status === 'suspect') : [];
+      if (active.length) {
+        tracks = (await Promise.all(active.map((s) => safe(
+          `/api/lab/track?strategyId=${encodeURIComponent(s.id)}`
+        )))).filter(Boolean);
+      }
+    }
 
     if (!pred) {
       // 还没有任何预判卡：不是错误，是"还没跑过"
@@ -621,9 +698,9 @@
     // 先渲染七格，再统一标注"依据不完整"（此时 is-live 已就位）
     renderEnv(pred);
     renderMainline(pred, sector);
-    renderTiming(wp, stats);
-    renderWatch(pred, summary);
-    renderRisk(health, sector);
+    renderTiming({ date: pred.date, signals, strategies: strat, tracks, ui });
+    renderWatch({ date: pred.date, wp, transitions: trans && trans.list, ui });
+    renderRisk({ risk });
     renderRecon(pred, stats);
     renderPlan(pred);
 

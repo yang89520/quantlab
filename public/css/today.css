@@ -239,12 +239,27 @@
 .sample-note{font-size:var(--fs-xs);color:var(--gold);background:rgba(232,184,75,.07);
   border:1px solid rgba(232,184,75,.25);border-radius:var(--r-sm);padding:8px 10px;line-height:1.5}
 
-/* 移动端 ②③④ 折叠：默认只展开 ②，③④ 可展开（结论始终可见） */
+/* 移动端七格折叠：只留「序号 + 标题 + 徽标 + 结论」，其余收进 .fold-body */
 .fold-toggle{display:none;margin-left:6px;background:none;border:1px solid var(--line2);
   color:var(--tx3-fixed);border-radius:6px;padding:3px 8px;font-family:inherit;
-  font-size:var(--fs-xs);cursor:pointer;min-height:30px}
+  font-size:var(--fs-xs);cursor:pointer;min-height:30px;flex:0 0 auto}
+.fold-toggle:active{background:var(--card2)}
 .fold-body{display:flex;flex-direction:column;gap:12px;margin-top:12px}
 @media (max-width:767px){
   .fold-toggle{display:inline-flex}
+  /* 收起态：只保留结论，四件套里其余三项（依据/失效条件/变化量）与情景、明细全部隐藏。
+     :not(.verdict) 兜住所有格子，避免每加一种块都要补一条选择器。 */
+  .cell.is-collapsed > .real-body > :not(.verdict){display:none}
   .cell.is-collapsed .fold-body{display:none}
+  /* 压缩纵向节奏，保证七格结论 2 屏内看完（06 §5.3 / 07 §4.4） */
+  .cells{gap:6px}
+  .cell{padding:10px 12px;gap:6px;border-radius:var(--r-md)}
+  .cell.is-collapsed > .real-body > .verdict{margin:0}
+  .cell.is-collapsed .verdict{font-size:16px;line-height:1.4;font-weight:600;letter-spacing:0}
+  .cell.is-collapsed .verdict .sub{font-size:var(--fs-xs);margin-top:2px;line-height:1.45;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .cell.is-collapsed .idx{opacity:.7}
+  .cell.is-collapsed .cell-hd h2{font-size:var(--fs-sm)}
+  /* 空态也别留 88px 的大白块，否则七个空格子就吃掉一屏 */
+  .cell.nodata .nodata-body{min-height:44px;padding:10px 12px;font-size:var(--fs-xs)}
 }
