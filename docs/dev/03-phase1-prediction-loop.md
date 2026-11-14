@@ -71,7 +71,7 @@ async function latestTradingDay()
 
 `market.db` 打不开时**降级走网络**并记 `degraded=true`，不许让服务起不来。
 
-### 2.1 `lib/store/` — 统一 DAO（DuckDB 主 / JSONL 兜底）
+### 2.1 `lib/dao/` — 统一 DAO（DuckDB 主 / JSONL 兜底）
 
 **不要自己写 `fs.writeFileSync`，也不要在业务代码里直接写 SQL。** 一律通过 DAO：
 

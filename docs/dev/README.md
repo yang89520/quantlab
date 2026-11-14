@@ -169,9 +169,9 @@ npm test             # 现有 26 项回归
 ├── lib/sources/adapters/em.js  二期  东财 clist / push2delay / push2ex
 ├── lib/sources/adapters/local-db.js     二期  上游 market.db 读
 ├── lib/sources/adapters/aggregate.js    二期  板块 K 线聚合（纯函数）
-├── lib/store/index.js          一期  统一 DAO（DuckDB 主 / JSONL 兜底）
-├── lib/store/duckdao.js        一期  DuckDB 后端（ql.duckdb）
-├── lib/store/jsondao.js        一期  JSONL 后端（兜底）
+├── lib/dao/index.js          一期  统一 DAO（DuckDB 主 / JSONL 兜底）
+├── lib/dao/duckdao.js        一期  DuckDB 后端（ql.duckdb）
+├── lib/dao/jsondao.js        一期  JSONL 后端（兜底）
 ├── lib/snapshot.js             一期  日快照存取
 ├── lib/predict.js              一期  预判卡生成
 ├── lib/reconcile.js            一期  对账与归因

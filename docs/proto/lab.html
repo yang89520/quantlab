@@ -186,8 +186,8 @@ BUY:CROSS(C,UP) AND CONVERGE;</textarea>
         </div>
 
         <div class="stack">
-          <div class="card" style="background:var(--card2)">
-            <div class="card-hd"><h3>未来函数扫描</h3><span class="chip chip-warn">2 项中危</span></div>
+          <div class="card" style="background:var(--card2)" id="scan-card" data-risk="mid">
+            <div class="card-hd"><h3>未来函数扫描</h3><span class="chip chip-warn" id="scan-chip">2 项中危</span></div>
             <div class="card-bd scan">
               <div class="scan-item mid">
                 <span aria-hidden="true">!</span>
@@ -201,6 +201,9 @@ BUY:CROSS(C,UP) AND CONVERGE;</textarea>
                 <span aria-hidden="true">?</span>
                 <span>未检测到 HIGH 危函数（BACKSET / ZIG / PEAK 等）。</span>
               </div>
+            </div>
+            <div style="padding:0 var(--sp-4) var(--sp-3);font-size:var(--fs-badge);color:var(--tx3);line-height:1.6" id="scan-rule">
+              规则：高危 → <b style="color:var(--up2)">禁止保存</b>；中危 → 允许保存但策略标「存疑」；提示 → 仅告知。
             </div>
           </div>
 
@@ -232,6 +235,7 @@ BUY:CROSS(C,UP) AND CONVERGE;</textarea>
             第 ④ 道闸无法检验（熊市段样本不足 60 日），因此不给「可用」。
             <b style="color:var(--tx)">无法检验 ≠ 通过</b>——这是三态里最容易被误读的一档。
           </span>
+          <button class="btn btn-sm" type="button" id="gate-detail" style="margin-left:auto">查看明细</button>
         </div>
 
         <div class="gates">
@@ -297,6 +301,19 @@ BUY:CROSS(C,UP) AND CONVERGE;</textarea>
     <!-- ========== 4. 信号跟踪 ========== -->
     <div role="tabpanel" id="p-sig" aria-labelledby="t-sig" tabindex="0" hidden>
       <div style="padding:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-4)">
+        <div class="filter-bar">
+          <div class="fld">
+            <label for="sig-strat">策略</label>
+            <select id="sig-strat">
+              <option selected>布林突破 v3</option>
+              <option>均线突破 v2</option>
+              <option>三把锁低吸 v5</option>
+            </select>
+          </div>
+          <div class="fld"><label for="sig-from">起始日</label><input id="sig-from" type="date" value="2026-10-15"></div>
+          <div class="fld"><label for="sig-to">截止日</label><input id="sig-to" type="date" value="2026-11-13"></div>
+        </div>
+
         <div>
           <h2 class="sect-h">实盘 vs 回测 累计命中率</h2>
           <div class="chart-wrap">
@@ -409,6 +426,38 @@ BUY:CROSS(C,UP) AND CONVERGE;</textarea>
   </div>
 </footer>
 
+<!-- 闸明细对话框 -->
+<dialog id="gd" aria-labelledby="gd-title">
+  <form method="dialog">
+    <div class="dlg-hd">
+      <h2 id="gd-title">五道闸 · 判定明细</h2>
+      <button class="x" type="submit" aria-label="关闭">×</button>
+    </div>
+    <div class="dlg-bd">
+      <p class="dlg-sub">每道闸的原始数值与阈值。判定不写「通过/不通过」以外的第四种说法。</p>
+      <table class="cmp">
+        <caption class="sr-only">五道闸原始值</caption>
+        <tbody>
+          <tr><th scope="row">① 未来函数</th><td class="good">不变性通过，高危 0</td></tr>
+          <tr><th scope="row">② 样本内 / 样本外</th><td class="num">+31% / +18%</td></tr>
+          <tr><th scope="row">　衰减（阈值 50%）</th><td class="good num">42%</td></tr>
+          <tr><th scope="row">③ 正收益标的 / 总数</th><td class="num">32 / 50（门槛 50%）</td></tr>
+          <tr><th scope="row">④ 熊市段样本</th><td class="bad num">47 日（门槛 60 日）</td></tr>
+          <tr><th scope="row">⑤ 双轨一致率</th><td>不适用（无 Python 版）</td></tr>
+        </tbody>
+      </table>
+      <div class="invalid">
+        <h3 class="sect-h">为什么结论是「存疑」而不是「可用」</h3>
+        <ul>
+          <li>第 ④ 道闸 pass=null，按三态规则 → 存疑</li>
+          <li>若把 null 当 true 处理，这份策略会被误判为可用并上线</li>
+        </ul>
+      </div>
+    </div>
+    <div class="dlg-ft"><button class="btn btn-primary" type="submit">知道了</button></div>
+  </form>
+</dialog>
+
 <script>
 (function(){
   var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
@@ -432,6 +481,20 @@ BUY:CROSS(C,UP) AND CONVERGE;</textarea>
       if (n !== null) { e.preventDefault(); select(n); }
     });
   });
+
+  /* ---------- 信号 tab：策略 / 日期范围 变更反馈（06 §4.4） ---------- */
+  var sigStrat = document.getElementById('sig-strat');
+  if (sigStrat) {
+    ['sig-strat', 'sig-from', 'sig-to'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', function(){
+        var f = document.getElementById('sig-from').value;
+        var t = document.getElementById('sig-to').value;
+        announce('已按「' + sigStrat.value + '」重载信号：' + f + ' 至 ' + t);
+      });
+    });
+  }
 
   /* 行号同步 */
   var code = document.getElementById('code');
@@ -488,9 +551,30 @@ BUY:CROSS(C,UP) AND CONVERGE;</textarea>
     setTimeout(function(){
       scanCard.innerHTML = scanCopy;
       btnScan.disabled = false;
+      syncSaveByRisk();
       announce('扫描完成，2 项中危，0 项高危');
     }, 900);
   });
+
+  /* ---------- 闸明细 ---------- */
+  var gd = document.getElementById('gd');
+  var gateDetail = document.getElementById('gate-detail');
+  gateDetail.addEventListener('click', function(){
+    gd.showModal();
+    var c = gd.querySelector('.btn-primary');
+    if (c) c.focus();
+  });
+
+  /* ---------- 高危禁止保存（06 §4.2） ---------- */
+  var scanCard = document.getElementById('scan-card');
+  var saveBtnRef = document.getElementById('btn-save');
+  function syncSaveByRisk(){
+    var risky = scanCard.dataset.risk === 'hi';
+    saveBtnRef.disabled = risky;
+    saveBtnRef.title = risky ? '扫描发现高危未来函数，禁止保存' : '';
+    if (risky) saveBtnRef.textContent = '禁止保存（高危）';
+  }
+  syncSaveByRisk();
 
   /* ---------- 保存为 v4 ---------- */
   var btnSave = document.getElementById('btn-save');

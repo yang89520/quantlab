@@ -561,3 +561,92 @@ footer{max-width:1280px;margin:0 auto;padding:0 var(--sp-4) var(--sp-6)}
 .hub-card .t{font-size:var(--fs-h2);font-weight:600}
 .hub-card .d{font-size:var(--fs-xs);color:var(--tx3);line-height:1.6}
 .hub-card .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:var(--sp-2)}
+
+/* ============================================================
+   补充：为对齐 docs/dev/06 而新增的组件
+   ============================================================ */
+
+/* ---------- 20. 状态条不完整（06 §2.4：顶部状态条同步变黄） ---------- */
+.hd-status.is-incomplete .tag.ok{
+  border-color:rgba(232,184,75,.4);color:var(--gold);background:rgba(232,184,75,.1);
+}
+.hd-status.is-incomplete .dot{background:var(--gold)}
+
+/* ---------- 21. 可点开的证据（06 §2.2：每条可点开看原始值） ---------- */
+.evid li.tappable{cursor:pointer;border-radius:6px;margin:0 -6px;padding:3px 6px;transition:background .16s}
+.evid li.tappable:hover{background:rgba(255,255,255,.04)}
+.evid li.tappable::after{
+  content:"›";color:var(--tx-disabled);font-size:var(--fs-xs);flex:0 0 auto;margin-left:2px;
+}
+
+/* ---------- 22. 板块双栏（06 §2.3②：行业榜与概念榜分开） ---------- */
+.sector-cols{display:grid;gap:var(--sp-2);grid-template-columns:1fr}
+@media (min-width:520px){ .sector-cols{grid-template-columns:1fr 1fr} }
+.sector-col{min-width:0}
+.sector-col .ch{font-size:var(--fs-badge);color:var(--tx3);font-weight:600;margin-bottom:5px;
+  display:flex;align-items:center;gap:5px}
+.srow-mini{
+  display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:var(--r-sm);
+  background:var(--card2);border:1px solid var(--line);min-width:0;margin-bottom:4px;
+}
+.srow-mini:last-child{margin-bottom:0}
+.srow-mini .nm{flex:1 1 auto;min-width:0;font-size:var(--fs-xs);font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow-mini .pct{flex:0 0 auto;font-size:var(--fs-xs);font-weight:600;font-variant-numeric:tabular-nums}
+.srow-mini .pcts{flex:0 0 auto;font-size:var(--fs-badge);color:var(--tx3);font-variant-numeric:tabular-nums}
+.badge-degraded{
+  font-size:var(--fs-badge);padding:1px 5px;border-radius:4px;
+  background:rgba(130,143,165,.14);color:var(--tx-disabled);border:1px solid var(--line);
+  white-space:nowrap;flex:0 0 auto;
+}
+
+/* ---------- 23. 移动端折叠格（06 §5.3：②③④ 窄屏折叠，默认只展开②） ---------- */
+.cell-toggle{display:none}
+@media (max-width:767px){
+  .cell.collapsible .cell-toggle{
+    display:inline-flex;align-items:center;gap:4px;margin-left:auto;
+    background:none;border:1px solid var(--line2);border-radius:var(--r-sm);
+    color:var(--tx2);font-family:inherit;font-size:var(--fs-badge);font-weight:600;
+    padding:5px 10px;min-height:32px;cursor:pointer;
+  }
+  .cell.collapsible .cell-toggle:hover{background:var(--card3);color:var(--tx)}
+  .cell.collapsible.is-collapsed .collapsible-body{display:none}
+  .cell.collapsible.is-collapsed .verdict{font-size:var(--fs-body)}
+}
+
+/* ---------- 24. 行内「⋯」菜单（06 §5.3：观察池操作收进菜单） ---------- */
+.kebab{display:none}
+@media (max-width:899px){
+  .row .act .btn{display:none}
+  .row .act .kebab{display:inline-flex}
+}
+.menu-wrap{position:relative;display:inline-flex}
+.menu{
+  position:absolute;right:0;top:calc(100% + 6px);z-index:30;min-width:132px;
+  background:var(--card2);border:1px solid var(--line2);border-radius:var(--r-md);
+  box-shadow:0 16px 40px rgba(0,0,0,.55);padding:5px;display:none;
+}
+.menu[data-open="true"]{display:block}
+.menu button{
+  display:block;width:100%;text-align:left;padding:9px 10px;border:none;border-radius:6px;
+  background:none;color:var(--tx2);font-family:inherit;font-size:var(--fs-xs);
+  cursor:pointer;min-height:36px;
+}
+.menu button:hover{background:var(--card3);color:var(--tx)}
+.menu button.danger{color:var(--up2)}
+.menu button.danger:hover{background:rgba(246,70,93,.14)}
+
+/* ---------- 25. 状态下拉 / 日期范围（06 §4.4 信号 tab 顶部） ---------- */
+.filter-bar{display:flex;gap:var(--sp-2);flex-wrap:wrap;align-items:flex-end}
+.filter-bar .fld{flex:0 1 160px;min-width:120px}
+@media (max-width:520px){ .filter-bar .fld{flex:1 1 100%} }
+
+/* ---------- 26. 首次运行占位（06 §7：对比区显示「首次运行」） ---------- */
+.first-run{
+  font-size:var(--fs-xs);color:var(--tx3);background:var(--card2);
+  border:1px dashed var(--line2);border-radius:var(--r-sm);padding:8px 10px;line-height:1.5;
+}
+
+/* 首日运行：对比区只显示占位，不隐藏整格（06 §7） */
+.cell.is-first .delta > *:not(.first-run){display:none}
+.cell.is-first .delta .first-run{display:inline-block}

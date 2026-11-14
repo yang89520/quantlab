@@ -131,7 +131,7 @@ py/
 
 ### 3.3 统一 DAO，业务代码不感知后端
 
-`lib/store/index.js` 对上层提供一致的方法签名，底层可切 DuckDB 或 JSONL：
+`lib/dao/index.js` 对上层提供一致的方法签名，底层可切 DuckDB 或 JSONL：
 
 ```js
 const store = await open('snapshot');   // 后端由 config.storage.engine 决定

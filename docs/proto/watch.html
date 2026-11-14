@@ -59,6 +59,28 @@
 .reason-item{padding:12px 14px;border-radius:var(--r-md);background:var(--card2);border:1px solid var(--line)}
 .reason-item .n{font-size:var(--fs-h2);font-weight:700;font-variant-numeric:tabular-nums}
 .reason-item .l{font-size:var(--fs-xs);color:var(--tx3);margin-top:2px}
+
+/* 状态筛选（06 §3.1：六项）*/
+.filters{display:flex;gap:var(--sp-2);flex-wrap:wrap;padding:var(--sp-3) var(--sp-4);
+  border-bottom:1px solid var(--line)}
+.filters button{
+  padding:8px 13px;border-radius:999px;border:1px solid var(--line2);
+  background:var(--card2);color:var(--tx2);font-family:inherit;
+  font-size:var(--fs-xs);font-weight:600;cursor:pointer;min-height:40px;transition:.16s;
+}
+.filters button:hover{border-color:var(--tx3);color:var(--tx)}
+.filters button[aria-pressed="true"]{background:#1E2A3B;color:#fff;border-color:#33455E}
+.filters button .cnt{color:var(--tx3);font-weight:400;margin-left:3px}
+.filters button[aria-pressed="true"] .cnt{color:var(--tx2)}
+.row.is-hidden{display:none}
+.kebab{
+  display:none;align-items:center;justify-content:center;
+  width:36px;height:36px;border-radius:var(--r-sm);border:1px solid var(--line2);
+  background:var(--card2);color:var(--tx2);font-size:16px;line-height:1;
+  font-family:inherit;cursor:pointer;flex:0 0 auto;
+}
+.kebab:hover{background:var(--card3);color:var(--tx)}
+@media (max-width:899px){ .row .act .kebab{display:inline-flex} }
 </style>
 </head>
 <body>
@@ -101,17 +123,17 @@
 
   <!-- 选项卡：全部 / 已移出 -->
   <div class="card">
-    <div class="tabs" role="tablist" aria-label="观察池视图">
-      <button role="tab" id="tab-in" aria-selected="true" aria-controls="panel-in" tabindex="0">
-        在池 <span class="cnt">6</span>
-      </button>
-      <button role="tab" id="tab-out" aria-selected="false" aria-controls="panel-out" tabindex="-1">
-        已移出 <span class="cnt">19</span>
-      </button>
+    <div class="filters" role="group" aria-label="按状态筛选">
+      <button type="button" aria-pressed="true" data-filter="all">全部 <span class="cnt">6</span></button>
+      <button type="button" aria-pressed="false" data-filter="watching">待观察 <span class="cnt">2</span></button>
+      <button type="button" aria-pressed="false" data-filter="ambush">埋伏 <span class="cnt">2</span></button>
+      <button type="button" aria-pressed="false" data-filter="confirmed">启动确认 <span class="cnt">1</span></button>
+      <button type="button" aria-pressed="false" data-filter="holding">持有 <span class="cnt">1</span></button>
+      <button type="button" aria-pressed="false" data-filter="removed">已移出 <span class="cnt">19</span></button>
     </div>
 
     <!-- 在池 -->
-    <div role="tabpanel" id="panel-in" aria-labelledby="tab-in" tabindex="0">
+    <div id="view-in">
       <div class="list" role="table" aria-label="在池标的">
         <div class="list-head" role="row">
           <span role="columnheader">代码</span>
@@ -123,7 +145,7 @@
           <span role="columnheader"><span class="sr-only">操作</span></span>
         </div>
 
-        <div class="row" role="row">
+        <div class="row" role="row" data-state="ambush">
           <span class="code" role="cell">600986</span>
           <span role="cell"><span class="name">浙文互联</span>
             <span class="meta"><span>入池 11-10 · 3 天</span><span>板块 <b>B 蓄势</b></span></span>
@@ -134,11 +156,20 @@
           <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">74</span>
           <span role="cell" class="act">
             <button class="btn btn-sm" type="button" data-detail="600986">详情</button>
+            <button class="btn btn-sm" type="button" data-note="600986 浙文互联">备注</button>
             <button class="btn btn-sm btn-danger" type="button" data-remove="600986 浙文互联" data-auto="too_slow">移出</button>
+            <span class="menu-wrap">
+              <button class="kebab" type="button" aria-haspopup="true" aria-expanded="false" aria-label="更多操作 600986 浙文互联">⋯</button>
+              <div class="menu" role="menu">
+                <button role="menuitem" type="button" data-detail="600986">查看详情</button>
+                <button role="menuitem" type="button" data-note="600986 浙文互联">加备注</button>
+                <button role="menuitem" type="button" class="danger" data-remove="600986 浙文互联" data-auto="too_slow">移出观察池</button>
+              </div>
+            </span>
           </span>
         </div>
 
-        <div class="row" role="row">
+        <div class="row" role="row" data-state="confirmed">
           <span class="code" role="cell">002384</span>
           <span role="cell"><span class="name">东山精密</span>
             <span class="meta"><span>入池 10-28 · 12 天</span><span>板块 <b>A 主攻</b></span></span>
@@ -149,11 +180,20 @@
           <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">86</span>
           <span role="cell" class="act">
             <button class="btn btn-sm" type="button" data-detail="002384">详情</button>
+            <button class="btn btn-sm" type="button" data-note="002384 东山精密">备注</button>
             <button class="btn btn-sm btn-danger" type="button" data-remove="002384 东山精密" data-auto="logic_broken">移出</button>
+            <span class="menu-wrap">
+              <button class="kebab" type="button" aria-haspopup="true" aria-expanded="false" aria-label="更多操作 002384 东山精密">⋯</button>
+              <div class="menu" role="menu">
+                <button role="menuitem" type="button" data-detail="002384">查看详情</button>
+                <button role="menuitem" type="button" data-note="002384 东山精密">加备注</button>
+                <button role="menuitem" type="button" class="danger" data-remove="002384 东山精密" data-auto="logic_broken">移出观察池</button>
+              </div>
+            </span>
           </span>
         </div>
 
-        <div class="row" role="row">
+        <div class="row" role="row" data-state="watching">
           <span class="code" role="cell">600176</span>
           <span role="cell"><span class="name">中国巨石</span>
             <span class="meta"><span>入池 11-11 · 2 天</span><span>板块 <b>D 退潮</b></span></span>
@@ -164,11 +204,20 @@
           <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">61</span>
           <span role="cell" class="act">
             <button class="btn btn-sm" type="button" data-detail="600176">详情</button>
+            <button class="btn btn-sm" type="button" data-note="600176 中国巨石">备注</button>
             <button class="btn btn-sm btn-danger" type="button" data-remove="600176 中国巨石" data-auto="logic_broken">移出</button>
+            <span class="menu-wrap">
+              <button class="kebab" type="button" aria-haspopup="true" aria-expanded="false" aria-label="更多操作 600176 中国巨石">⋯</button>
+              <div class="menu" role="menu">
+                <button role="menuitem" type="button" data-detail="600176">查看详情</button>
+                <button role="menuitem" type="button" data-note="600176 中国巨石">加备注</button>
+                <button role="menuitem" type="button" class="danger" data-remove="600176 中国巨石" data-auto="logic_broken">移出观察池</button>
+              </div>
+            </span>
           </span>
         </div>
 
-        <div class="row" role="row">
+        <div class="row" role="row" data-state="holding">
           <span class="code" role="cell">300308</span>
           <span role="cell"><span class="name">中际旭创</span>
             <span class="meta"><span>入池 10-30 · 10 天</span><span>板块 <b>A 主攻</b></span></span>
@@ -179,11 +228,20 @@
           <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">91</span>
           <span role="cell" class="act">
             <button class="btn btn-sm" type="button" data-detail="300308">详情</button>
+            <button class="btn btn-sm" type="button" data-note="300308 中际旭创">备注</button>
             <button class="btn btn-sm btn-danger" type="button" data-remove="300308 中际旭创" data-auto="replaced">移出</button>
+            <span class="menu-wrap">
+              <button class="kebab" type="button" aria-haspopup="true" aria-expanded="false" aria-label="更多操作 300308 中际旭创">⋯</button>
+              <div class="menu" role="menu">
+                <button role="menuitem" type="button" data-detail="300308">查看详情</button>
+                <button role="menuitem" type="button" data-note="300308 中际旭创">加备注</button>
+                <button role="menuitem" type="button" class="danger" data-remove="300308 中际旭创" data-auto="replaced">移出观察池</button>
+              </div>
+            </span>
           </span>
         </div>
 
-        <div class="row" role="row">
+        <div class="row" role="row" data-state="watching">
           <span class="code" role="cell">300251</span>
           <span role="cell"><span class="name">光线传媒</span>
             <span class="meta"><span>入池 11-03 · 8 天</span><span>板块 <b>A 主攻</b></span></span>
@@ -194,11 +252,20 @@
           <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">78</span>
           <span role="cell" class="act">
             <button class="btn btn-sm" type="button" data-detail="300251">详情</button>
+            <button class="btn btn-sm" type="button" data-note="300251 光线传媒">备注</button>
             <button class="btn btn-sm btn-danger" type="button" data-remove="300251 光线传媒" data-auto="too_slow">移出</button>
+            <span class="menu-wrap">
+              <button class="kebab" type="button" aria-haspopup="true" aria-expanded="false" aria-label="更多操作 300251 光线传媒">⋯</button>
+              <div class="menu" role="menu">
+                <button role="menuitem" type="button" data-detail="300251">查看详情</button>
+                <button role="menuitem" type="button" data-note="300251 光线传媒">加备注</button>
+                <button role="menuitem" type="button" class="danger" data-remove="300251 光线传媒" data-auto="too_slow">移出观察池</button>
+              </div>
+            </span>
           </span>
         </div>
 
-        <div class="row" role="row">
+        <div class="row" role="row" data-state="ambush">
           <span class="code" role="cell">002739</span>
           <span role="cell"><span class="name">万达电影</span>
             <span class="meta"><span>入池 10-29 · 11 天</span><span>板块 <b>B 蓄势</b></span></span>
@@ -209,14 +276,23 @@
           <span role="cell" class="num" style="font-variant-numeric:tabular-nums;font-weight:600">72</span>
           <span role="cell" class="act">
             <button class="btn btn-sm" type="button" data-detail="002739">详情</button>
+            <button class="btn btn-sm" type="button" data-note="002739 万达电影">备注</button>
             <button class="btn btn-sm btn-danger" type="button" data-remove="002739 万达电影" data-auto="too_slow">移出</button>
+            <span class="menu-wrap">
+              <button class="kebab" type="button" aria-haspopup="true" aria-expanded="false" aria-label="更多操作 002739 万达电影">⋯</button>
+              <div class="menu" role="menu">
+                <button role="menuitem" type="button" data-detail="002739">查看详情</button>
+                <button role="menuitem" type="button" data-note="002739 万达电影">加备注</button>
+                <button role="menuitem" type="button" class="danger" data-remove="002739 万达电影" data-auto="too_slow">移出观察池</button>
+              </div>
+            </span>
           </span>
         </div>
       </div>
     </div>
 
     <!-- 已移出 -->
-    <div role="tabpanel" id="panel-out" aria-labelledby="tab-out" tabindex="0" hidden>
+    <div id="view-out" hidden>
       <div class="card-bd" style="display:flex;flex-direction:column;gap:var(--sp-4)">
         <div>
           <h2 class="sect-h">移出原因分布（累计 19 只）</h2>
@@ -236,7 +312,7 @@
           <table class="tbl">
             <caption>最近移出的 4 只</caption>
             <thead>
-              <tr><th>代码</th><th>名称</th><th>移出日</th><th class="r">停留</th><th>原因</th><th class="r">移出后 5 日</th></tr>
+              <tr><th>代码</th><th>名称</th><th>移出日</th><th class="r">停留</th><th>原因</th><th class="r">移出时涨跌</th></tr>
             </thead>
             <tbody>
               <tr><td class="muted">601636</td><td class="strong">旗滨集团</td><td>2026-11-12</td><td class="r">11 天</td>
@@ -271,6 +347,27 @@
   <div class="dr-bd" id="dt-body"></div>
 </dialog>
 
+<!-- 加备注对话框 -->
+<dialog id="nt" aria-labelledby="nt-title">
+  <form method="dialog">
+    <div class="dlg-hd">
+      <h2 id="nt-title">加备注</h2>
+      <button class="x" type="submit" aria-label="关闭">×</button>
+    </div>
+    <div class="dlg-bd">
+      <p class="dlg-sub">给 <b id="nt-target">—</b> 记一条观察笔记。备注只影响你自己的复盘，不改变池内状态。</p>
+      <div class="field">
+        <label for="nt-text">备注内容</label>
+        <input id="nt-text" type="text" placeholder="例如：等待放量突破 8.15 再考虑" autocomplete="off">
+      </div>
+    </div>
+    <div class="dlg-ft">
+      <button class="btn" type="submit" value="cancel">取消</button>
+      <button class="btn btn-primary" type="button" id="nt-ok">保存备注</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- 移出对话框 -->
 <dialog id="rm" aria-labelledby="rm-title" aria-describedby="rm-sub">
   <form method="dialog">
@@ -301,8 +398,8 @@
           <span class="txt"><span class="t">我判断错了</span><span class="d">当初入池的理由本身站不住</span></span>
         </label>
       </fieldset>
-      <div class="field">
-        <label for="rm-note">补充说明（选填）</label>
+      <div class="field" id="rm-note-wrap" hidden>
+        <label for="rm-note">错在哪（选填）</label>
         <input id="rm-note" type="text" placeholder="例如：把反弹当成了反转" autocomplete="off">
       </div>
       <p class="err" id="rm-err" role="alert">请先选择一个原因</p>
@@ -316,28 +413,94 @@
 
 <script>
 (function(){
-  /* ---------- 选项卡（ARIA + 方向键） ---------- */
-  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
-  function selectTab(i){
-    tabs.forEach(function(t, k){
-      var sel = k === i;
-      t.setAttribute('aria-selected', sel ? 'true' : 'false');
-      t.tabIndex = sel ? 0 : -1;
-      document.getElementById(t.getAttribute('aria-controls')).hidden = !sel;
+  /* ---------- 状态筛选（06 §3.1：六项，其中「已移出」切到另一份列表） ---------- */
+  var filterBtns = Array.prototype.slice.call(document.querySelectorAll('.filters button'));
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#view-in .row'));
+  var viewIn = document.getElementById('view-in');
+  var viewOut = document.getElementById('view-out');
+
+  function applyFilter(f){
+    filterBtns.forEach(function(b){
+      b.setAttribute('aria-pressed', b.dataset.filter === f ? 'true' : 'false');
     });
-    tabs[i].focus();
+
+    if (f === 'removed') { viewIn.hidden = true; viewOut.hidden = false; return; }
+    viewIn.hidden = false; viewOut.hidden = true;
+
+    var shown = 0;
+    rows.forEach(function(r){
+      var hit = (f === 'all') || (r.dataset.state === f);
+      r.classList.toggle('is-hidden', !hit);
+      if (hit) shown++;
+    });
+    announce(f === 'all' ? '显示全部 ' + shown + ' 只' : '筛选出 ' + shown + ' 只');
   }
-  tabs.forEach(function(t, i){
-    t.addEventListener('click', function(){ selectTab(i); });
-    t.addEventListener('keydown', function(e){
-      var n = null;
-      if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
-      else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
-      else if (e.key === 'Home') n = 0;
-      else if (e.key === 'End') n = tabs.length - 1;
-      if (n !== null) { e.preventDefault(); selectTab(n); }
+
+  filterBtns.forEach(function(b){
+    b.addEventListener('click', function(){ applyFilter(b.dataset.filter); });
+  });
+
+  /* 06 §5.2：下钻带 state 参数时直接落到对应筛选 */
+  var qs = new URLSearchParams(location.search).get('state');
+  if (qs && filterBtns.some(function(b){ return b.dataset.filter === qs; })) {
+    applyFilter(qs);
+  }
+
+  /* ---------- 行内「⋯」菜单（06 §5.3：移动端操作收进菜单） ---------- */
+  function closeMenus(){
+    document.querySelectorAll('.menu[data-open="true"]').forEach(function(m){
+      m.dataset.open = 'false';
+      var k = m.parentElement.querySelector('.kebab');
+      if (k) k.setAttribute('aria-expanded', 'false');
+    });
+  }
+  document.querySelectorAll('.kebab').forEach(function(k){
+    k.addEventListener('click', function(e){
+      e.stopPropagation();
+      var menu = k.parentElement.querySelector('.menu');
+      var open = menu.dataset.open === 'true';
+      closeMenus();
+      menu.dataset.open = open ? 'false' : 'true';
+      k.setAttribute('aria-expanded', open ? 'false' : 'true');
+      if (!open) {
+        var first = menu.querySelector('button');
+        if (first) first.focus();
+      }
     });
   });
+  document.addEventListener('click', closeMenus);
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape') closeMenus();
+  });
+
+  /* ---------- 备注对话框 ---------- */
+  var nt = document.getElementById('nt');
+  var ntTarget = document.getElementById('nt-target');
+  var ntText = document.getElementById('nt-text');
+  var ntOk = document.getElementById('nt-ok');
+
+  document.querySelectorAll('[data-note]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      closeMenus();
+      lastFocus = btn;
+      ntTarget.textContent = btn.dataset.note;
+      ntText.value = '';
+      nt.showModal();
+      ntText.focus();
+    });
+  });
+  ntOk.addEventListener('click', function(){
+    var v = ntText.value.trim();
+    nt.close();
+    announce(v ? '备注已保存：' + v : '备注已保存（空内容）');
+  });
+  nt.addEventListener('close', function(){
+    if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
+    lastFocus = null;
+  });
+
+  /* ---------- 移出原因：选「我判断错了」才要求填「错在哪」 ---------- */
+  var noteWrap = document.getElementById('rm-note-wrap');
 
   /* ---------- 详情抽屉数据 ---------- */
   var DETAIL = {
@@ -403,9 +566,23 @@
       return (i ? 'L' : 'M') + scale(x).toFixed(1) + ' ' + scaleY(y).toFixed(1);
     }).join(' ');
     var area = d + ' L' + scale(xmax).toFixed(1) + ' ' + (h - 4) + ' L' + scale(0).toFixed(1) + ' ' + (h - 4) + ' Z';
+    // 06 §3.3 要求「收盘价迷你图 + MA20」：按点数做移动平均近似（示意）
+    var win = 5, maPts = [];
+    for (var i2 = 0; i2 < pts.length; i2++){
+      var from = Math.max(0, i2 - win + 1), sum = 0;
+      for (var k2 = from; k2 <= i2; k2++) sum += +pts[k2].split(',')[1];
+      maPts.push(Math.round(sum / (i2 - from + 1)));
+    }
+    var maD = maPts.map(function(yv, i2){
+      var x2 = +pts[i2].split(',')[0];
+      return (i2 ? 'L' : 'M') + scale(x2).toFixed(1) + ' ' + scaleY(yv).toFixed(1);
+    }).join(' ');
     return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" role="img" ' +
-           'aria-label="入池以来收盘价走势，整体上行"><path d="' + area + '" fill="rgba(246,70,93,.10)"/>' +
-           '<path d="' + d + '" fill="none" stroke="#F6465D" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+           'aria-label="入池以来收盘价走势与 MA20，整体上行">' +
+           '<path d="' + area + '" fill="rgba(246,70,93,.10)"/>' +
+           '<path d="' + d + '" fill="none" stroke="#F6465D" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>' +
+           '<path d="' + maD + '" fill="none" stroke="#6BA5FF" stroke-width="1.2" stroke-dasharray="3 2" opacity=".9"/>' +
+           '</svg>';
   }
 
   document.querySelectorAll('[data-detail]').forEach(function(btn){
@@ -424,6 +601,11 @@
 
           <h3 class="sect-h">入池以来走势</h3>
           <div class="spark-wrap">${sparkSVG(d.spark)}</div>
+          <div style="display:flex;gap:var(--sp-3);flex-wrap:wrap;font-size:var(--fs-badge);color:var(--tx3);margin-top:6px">
+            <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:12px;height:2px;background:#F6465D;border-radius:1px"></i>收盘价</span>
+            <span style="display:inline-flex;align-items:center;gap:5px"><i style="width:12px;height:2px;background:#6BA5FF;border-radius:1px"></i>MA20</span>
+            <span>入池以来走势（示意点数）</span>
+          </div>
         </div>
 
         <div>
@@ -508,10 +690,22 @@
         if (hit) hit.checked = true;
       }
       rm.showModal();
+      noteWrap.hidden = true;                       // 默认不显示「错在哪」
       var first = rm.querySelector('input[name="reason"]:checked') || rm.querySelector('input[name="reason"]');
       if (first) first.focus();
     });
   });
+
+  rm.querySelectorAll('input[name="reason"]').forEach(function(r){
+    r.addEventListener('change', function(){
+      noteWrap.hidden = r.value !== 'wrong' || !r.checked;
+      if (!noteWrap.hidden) ntText2Focus();
+    });
+  });
+  function ntText2Focus(){
+    var el = document.getElementById('rm-note');
+    if (el) el.focus();
+  }
 
   rm.addEventListener('close', function(){
     if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();

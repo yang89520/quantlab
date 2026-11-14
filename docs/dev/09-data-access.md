@@ -342,7 +342,7 @@ CREATE TABLE meta (k VARCHAR PRIMARY KEY, v JSON);
 
 ### 7.4 统一 DAO（业务代码不感知存储）
 
-`lib/store/index.js`：
+`lib/dao/index.js`：
 
 ```js
 /**
