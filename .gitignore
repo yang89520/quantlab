@@ -29,4 +29,11 @@ config.local.json
 data/ql.duckdb
 data/ql.duckdb.wal
 data/jsonl/
+data/sectors/
+data/watchpool/
+data/sources/
+data/strategies/
 logs/
+
+# 三期 Python 独立虚拟环境（可重建，不入库）
+py/.venv/

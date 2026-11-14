@@ -19,7 +19,14 @@
       "_note_defend": "初始值。同上，35 分以下判定为防守。"
     },
     "candidateCount": 5,
-    "historyDays": 250
+    "historyDays": 250,
+    "scoring": {
+      "trendPerCondition": 20,
+      "breadthLow": 0.35,
+      "breadthSpan": 0.40,
+      "volLow": 0.70,
+      "volSpan": 0.60
+    }
   },
 
   "integrity": {
@@ -29,14 +36,30 @@
 
   "judgment": {
     "minSampleDays": 10,
-    "minStateSample": 5
+    "minStateSample": 5,
+    "candidateMinHitRatio": 0.40,
+    "envWeight": 0.5,
+    "candWeight": 0.5
   },
 
   "sector": {
     "minMomentum": 80,
     "minFunds": 70,
     "dropMomentum": 40,
-    "minSectors": 10
+    "minSectors": 10,
+    "weights": { "momentum": 0.35, "funds": 0.25, "breadth": 0.20, "continuity": 0.20 },
+    "mixRet": { "ret5": 0.40, "ret20": 0.60 },
+    "funds": {
+      "amountPctile": 0.45, "volScore": 0.25, "netInflowPctile": 0.30,
+      "degradedAmount": 0.70, "degradedVol": 0.30
+    },
+    "volScore": { "base": 0.5, "span": 1.0 },
+    "breadth": { "upRatio": 0.8, "zt": 0.2, "ztFull": 5, "neutralUpRatio": 50 },
+    "continuityDays": 20,
+    "amountLookback": 250,
+    "aggregate": { "base": 1000, "minMembers": 5 },
+    "directionRank": 0.70,
+    "mainlineTop": 3
   },
 
   "watchpool": {
@@ -48,7 +71,10 @@
     "shrink": 0.8,
     "breakoutVol": 1.5,
     "holdTol": 0.97,
-    "confirmWindow": 3
+    "confirmWindow": 3,
+    "removeVol": 1.2,
+    "snapshotLimit": 60,
+    "removedRetentionDays": 90
   },
 
   "gates": {
@@ -56,6 +82,31 @@
     "minUniverse": 30,
     "minPositiveRatio": 0.5,
     "minPhaseRet": -0.05,
-    "degradeGap": 0.15
+    "degradeGap": 0.15,
+    "split": 0.7,
+    "oosMinBars": 100,
+    "universePool": 200,
+    "universeSample": 50,
+    "sampleSeed": 20261113,
+    "phaseLookback": 250,
+    "phaseBull": 0.15,
+    "phaseBear": -0.15,
+    "phaseMinDays": 60,
+    "dualUniverse": 100,
+    "dualAgreeRate": 0.99,
+    "dynamicK": 20,
+    "checkEveryDays": 20,
+    "trackDays": [1, 5, 10],
+    "pythonTimeoutMs": 120000
+  },
+
+  "sources": {
+    "pacingMs": { "none": 0, "low": 0, "med": 300, "high": 500 },
+    "downAfterFails": 3,
+    "downWindow": 5,
+    "cooldownMin": 20,
+    "probeIntervalMin": 5,
+    "sectorMemberPages": 5,
+    "sectorMemberPageSize": 100
   }
 }
