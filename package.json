@@ -9,13 +9,18 @@
   "scripts": {
     "start": "node server.js",
     "test": "node tools/smoke.js",
-    "test:offline": "node tools/smoke.js --offline"
+    "test:offline": "node tools/smoke.js --offline",
+    "test:unit": "node tests/unit/phase1.test.js && node tests/integration/reconcile.test.js",
+    "daily": "node tools/daily-close.js",
+    "report": "node tools/pred-report.js",
+    "test:today": "node tests/smoke-today.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@duckdb/node-api": "^2.0.0-r.1",
     "express": "^4.22.3"
   },
   "private": true

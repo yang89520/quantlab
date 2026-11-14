@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+
+  "storage": {
+    "engine": "auto",
+    "ownDb": "data/ql.duckdb"
+  },
+  "localDb": {
+    "enabled": true,
+    "marketDb": ""
+  },
+
+  "predict": {
+    "weights": { "trend": 40, "breadth": 30, "vol": 30 },
+    "verdict": {
+      "attack": 65,
+      "defend": 35,
+      "_note_attack": "初始值。依据：2026-11 人工观察 65 分以上多为顺势环境。需累积 20 个交易日对账后校准。",
+      "_note_defend": "初始值。同上，35 分以下判定为防守。"
+    },
+    "candidateCount": 5,
+    "historyDays": 250
+  },
+
+  "integrity": {
+    "minSnapshotCount": 4000,
+    "minBars": 120
+  },
+
+  "judgment": {
+    "minSampleDays": 10,
+    "minStateSample": 5
+  },
+
+  "sector": {
+    "minMomentum": 80,
+    "minFunds": 70,
+    "dropMomentum": 40,
+    "minSectors": 10
+  },
+
+  "watchpool": {
+    "maxStay": { "watching": 10, "ambush": 15, "confirmed": 5 },
+    "maxSize": 30,
+    "minScore": 70,
+    "bandLow": 0.98,
+    "bandHigh": 1.03,
+    "shrink": 0.8,
+    "breakoutVol": 1.5,
+    "holdTol": 0.97,
+    "confirmWindow": 3
+  },
+
+  "gates": {
+    "maxDecay": 0.5,
+    "minUniverse": 30,
+    "minPositiveRatio": 0.5,
+    "minPhaseRet": -0.05,
+    "degradeGap": 0.15
+  }
+}

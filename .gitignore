@@ -21,3 +21,12 @@ npm-debug.log*
 
 # 本地助手工作目录（会话记忆、临时产物），不参与版本管理
 .workbuddy/
+
+# 本机配置（含上游行情库绝对路径，绝不入库）
+config.local.json
+
+# 自有业务库与 JSONL 兜底数据（可由 daily-close 重建，不入库）
+data/ql.duckdb
+data/ql.duckdb.wal
+data/jsonl/
+logs/
