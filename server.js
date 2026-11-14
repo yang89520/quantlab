@@ -457,7 +457,7 @@ app.get('/api/snapshot/summary', async (req, res) => {
 /** 健康检查：数据源 + 存储 + 待对账数 */
 app.get('/api/health', async (req, res) => {
   try {
-    const storeInfo = await storeDao.info();
+    const storeInfo = await storeDao.info({ readOnly: true });
     const dsHealth = await ds.health();
     let pending = 0;
     try {
