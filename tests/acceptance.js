@@ -249,6 +249,21 @@ function run(cmd, args, opts) {
     && (lp.createdAt === null || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(lp.createdAt))),
     `status=${hResp.status} lastPrediction=${JSON.stringify(lp)}`);
 
+  // C25：06 §5.2「下钻必须能返回原位置」。
+  // 光有 nav-return.js 不够——页面得真的把 data-back 挂在下钻链接上，
+  // 否则点击时不会记录滚动位置，回去就跳回顶部。
+  const drillPages = ['public/today.html', 'public/watch.html', 'public/lab.html',
+    'public/sector.html', 'public/index.html'];
+  const navLoaded = drillPages.filter((p) => /nav-return\.js/.test(read(p)));
+  const backPages = ['public/js/today.js', 'public/js/watch.js', 'public/js/lab.js', 'public/js/sector.js']
+    // 两种写法都算：拼字符串是 data-back="x"，动态生成是 setAttribute('data-back', 'x')
+    .filter((p) => /data-back="|'data-back'/.test(read(p)));
+  ok('C25', '下钻可返回原位置（五页都加载 nav-return，下钻链接带 data-back）',
+    navLoaded.length === 5 && backPages.length === 4
+    && /QLPageState/.test(read('public/js/watch.js'))
+    && /QLApplyState/.test(read('public/js/watch.js')),
+    `加载 ${navLoaded.length}/5，带 data-back ${backPages.length}/4`);
+
   // 加严：前端也在检查范围内（文档只要求 lib/，本项目把前端一并纳入）
   const allJs = jsFiles.concat(filesIn('public/js', '.js'));
   const d2b = grep(allJs, /catch\s*\([^)]*\)\s*\{\s*\/\*[^]*?\*\/\s*\}/);
