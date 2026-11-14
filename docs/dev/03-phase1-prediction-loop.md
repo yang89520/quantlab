@@ -396,9 +396,9 @@ buildInvalidIf(env) → [
 node tools/daily-close.js
 # 期望：snapshot 表当日行数 >=4000；prediction 恰好 1 行；reconcile 为 null
 
-# 2. 幂等
+# 2. 幂等（再跑一次，行数不变）
 node tools/daily-close.js
-node -e "const s=require('./lib/store');s.open('prediction').then(x=>console.log(x.count()))"   # 仍为 1
+node -e "require('./lib/dao').open().then(async d=>console.log(await d.count('prediction')))"   # 仍为 1
 
 # 3. 报告
 node tools/pred-report.js --days 20
@@ -412,10 +412,24 @@ QL_STORAGE=jsonl node tools/daily-close.js
 npm test
 ```
 
-- [ ] 上述 5 条全通过
-- [ ] 变异验证 6 条全部变红
-- [ ] `/api/health` 返回 `lastPrediction` 非空
-- [ ] **确认 `market.db` 未被修改**（对比运行前后的文件 mtime）
+> 2026-11-14 修正两处：
+> 1. 第 2 步原写 `require('./lib/store')` —— `lib/store.js` 是**自选股 JSON 存储**，
+>    与数据库 DAO 不是一回事（DAO 在 `lib/dao`）。照原文敲会报 `open is not a function`。
+> 2. 第 4 步的 `QL_STORAGE=jsonl` 原先**代码里没有实现**，环境变量被忽略，实际跑的还是 duckdb
+>    （日志里 `store.ready {"engine":"duckdb"}` 会露馅）。现已在 `lib/config.js` 补上该开关，
+>    非法值直接抛错而不是静默回落。
+
+- [x] 上述 5 条全通过
+- [x] 变异验证 6 条全部变红
+- [x] `/api/health` 返回 `lastPrediction` 非空（`{date,targetDate,verdict,score,dataComplete,createdAt}`）
+- [x] **确认 `market.db` 未被修改**（对比运行前后的文件 mtime）
+
+> 2026-11-14 核验记录：
+> - 幂等：连跑 3 次 `daily-close.js` 后 `prediction` 仍为 1 行
+> - 兜底后端：`QL_STORAGE=jsonl` 跑完整闭环，日志 `store.ready {"engine":"jsonl"}`，预判/观察池/信号/风险四步都落盘
+> - 上游库只读：`market.db` 运行前后 `mtime=1794647609 / size=37660143616` 完全一致（11-14 跑完 `--skip-fetch` 全流程后复核）
+> - `lastPrediction` 落地时踩到两个坑，都已修：DuckDB 的 TIMESTAMP 不是 JS `Date`（返回 `{micros: BigInt}`），
+>   `res.json` 遇 BigInt 直接抛错让整个 `/api/health` 变 500。现在响应层统一做了 BigInt 兜底 + 时间折 ISO。
 
 ---
 

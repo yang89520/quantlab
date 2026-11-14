@@ -100,6 +100,12 @@ VALUES ('2026-11-13', 'sh', '600986', 7.46, -1.84, 595560000, 5.31, 15200000000)
 | `amount` | DOUBLE | 成交额（元） | 快照 `amount` |
 | `turnover` | DOUBLE | 换手率（%） | 快照 `turnover` |
 | `float_cap` | DOUBLE | 流通市值（元） | 快照 `floatCap` |
+| `amplitude` | DOUBLE | 振幅（%），`(high-low)/prevClose×100` | 快照 `amplitude` |
+
+> **`amplitude` 补记（2026-11-14）**：本表原漏了这一列，实现时按对账需要补上——
+> `lib/reconcile.js` 判「冲高回落」用的是「振幅 >3% 且收跌」（原文 §S3 归因规则），
+> 没有这一列就只能事后重算 K 线，对账会慢一个量级。
+> 数值精度见 `lib/dao/schema.js` 的 `round`（振幅 2 位，涨跌幅 4 位）。
 
 **`complete` 判定**：当日行数 `>= config.integrity.minSnapshotCount`（默认 4000）。
 
