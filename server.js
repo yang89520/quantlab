@@ -12,6 +12,7 @@ const Q = require('./lib/quote');
 const store = require('./lib/store');
 const scan = require('./lib/scan');
 const shapeLib = require('./public/js/shape');
+const config = require('./lib/config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -454,7 +455,255 @@ app.get('/api/snapshot/summary', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
-/** 健康检查：数据源 + 存储 + 待对账数 */
+/* ============================================================
+   二期闭环 API（docs/dev/04 §5）：板块强度 + 观察池
+   ============================================================ */
+const sectordata = require('./lib/sectordata');
+const watchpool = require('./lib/watchpool');
+const sourceHub = require('./lib/sources/index.js');
+
+const FOOTNOTE = '历史强度基于当前成分回算，长周期仅供参考（幸存者偏差）';
+const sectorDate = async (q) => q || (await ds.latestTradingDay()).date;
+
+/** 板块强度榜：行业/概念分两张榜返回，绝不混排 */
+app.get('/api/sector/strength', async (req, res) => {
+  try {
+    const date = await sectorDate(req.query.date);
+    const t = req.query.type;
+    const type = (t === 'industry' || t === 'concept') ? t : null;
+    const rows = await sectordata.readStrength(date, type, { readOnly: true });
+    ok(res, {
+      date, type: type || 'all', total: rows.length, footnote: FOOTNOTE,
+      industry: rows.filter((r) => r.type === 'industry'),
+      concept: rows.filter((r) => r.type === 'concept'),
+      degradedCount: rows.filter((r) => r.degraded).length,
+    });
+  } catch (e) { fail(res, e); }
+});
+
+/** 板块强度历史（看轮动） */
+app.get('/api/sector/history', async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(120, Number(req.query.days) || 20));
+    const rows = await sectordata.readHistory(days, { readOnly: true });
+    ok(res, { days, total: rows.length, footnote: FOOTNOTE, rows });
+  } catch (e) { fail(res, e); }
+});
+
+/** 单板块详情：因子拆解 + 当日成分（成分来自落盘，不是现场抓的） */
+app.get('/api/sector/:code', async (req, res) => {
+  try {
+    const date = await sectorDate(req.query.date);
+    const rows = await sectordata.readStrength(date, null, { readOnly: true });
+    const one = rows.find((r) => r.sector === req.params.code);
+    if (!one) return ok(res, null);
+    const st = await storeDao.open({ readOnly: true });
+    const members = await st.query('sector_member', {
+      where: { date, sector: req.params.code }, order: 'code', limit: 1000,
+    });
+    ok(res, Object.assign({}, one, {
+      date,
+      members: members.map((m) => m.code),
+      memberCount: members.length,
+      footnote: FOOTNOTE,
+    }));
+  } catch (e) { fail(res, e); }
+});
+
+/** 观察池全量，按 state 分组 */
+app.get('/api/watchpool', async (req, res) => {
+  try {
+    const all = watchpool.list();
+    const groups = {};
+    for (const s of watchpool.STATES) groups[s] = [];
+    for (const e of all) (groups[e.state] || (groups[e.state] = [])).push(e);
+    ok(res, {
+      total: all.length,
+      maxSize: config.watchpool.maxSize,
+      groups,
+      list: all,
+      reasons: watchpool.REASON_CN,
+    });
+  } catch (e) { fail(res, e); }
+});
+
+/** 迁移历史（放在 /:code 路由之前，避免被当成 code） */
+app.get('/api/watchpool/transitions', async (req, res) => {
+  try {
+    ok(res, { code: req.query.code || null, list: watchpool.transitions(req.query.code) });
+  } catch (e) { fail(res, e); }
+});
+
+/** 入池：板块档位由后端查当日榜单判定，不信前端传值 */
+app.post('/api/watchpool', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const date = b.date || (await ds.latestTradingDay()).date;
+    let grade = null;
+    if (b.sector) {
+      const rows = await sectordata.readStrength(date, null, { readOnly: true });
+      const s = rows.find((r) => r.sector === b.sector);
+      grade = s ? s.grade : null;
+    }
+    const entry = await watchpool.add({
+      code: b.code, name: b.name, sector: b.sector, grade,
+      score: b.score, entryReason: b.entryReason, date,
+    });
+    ok(res, entry);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/** 改状态 / 加备注 */
+app.patch('/api/watchpool/:code', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const e = await watchpool.update(req.params.code, {
+      note: b.note, state: b.state, date: b.date,
+    });
+    ok(res, e);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/** 移出：reason 必填且必须是四选一，跳过直接 400 */
+app.delete('/api/watchpool/:code', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const e = await watchpool.remove(req.params.code, b.reason, {
+      date: b.date, chg: b.chg, wrongDetail: b.wrongDetail,
+    });
+    ok(res, e);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/* ============================================================
+   三期实验室 API（docs/dev/05 §8）
+   ============================================================ */
+const lab = require('./lib/lab');
+const strategies = require('./lib/strategy');
+const track = require('./lib/track');
+const py = require('./lib/pyrunner');
+const gatesLib = require('./lib/gates');
+
+/** 解析公式输出线（必须手选，不自动猜） */
+app.post('/api/lab/formula/lines', async (req, res) => {
+  try { ok(res, await lab.lines((req.body || {}).formula || '')); }
+  catch (e) { fail(res, e); }
+});
+
+/** 未来函数静态扫描；level=high 时前端必须禁用保存 */
+app.post('/api/lab/formula/scan', async (req, res) => {
+  try { ok(res, await lab.scan((req.body || {}).formula || '')); }
+  catch (e) { fail(res, e); }
+});
+
+/** 单次回测（真实 K 线） */
+app.post('/api/lab/backtest', async (req, res) => {
+  try { ok(res, await lab.backtest(req.body || {})); }
+  catch (e) { fail(res, e); }
+});
+
+/** 跑五道闸：耗时任务，立即返回 taskId */
+app.post('/api/lab/gates', async (req, res) => {
+  try {
+    const id = (req.body || {}).strategyId;
+    if (!id || !strategies.get(id)) return res.status(400).json({ ok: false, error: '策略不存在' });
+    const taskId = await lab.startGates(id);
+    ok(res, { taskId, status: 'pending' });
+  } catch (e) { fail(res, e); }
+});
+
+/** 轮询闸结果 */
+app.get('/api/lab/gates/:taskId', async (req, res) => {
+  try {
+    const t = lab.getTask(req.params.taskId);
+    if (!t) return res.status(404).json({ ok: false, error: '任务不存在' });
+    ok(res, {
+      taskId: t.id, status: t.status, progress: t.progress,
+      result: t.result, error: t.error, createdAt: t.createdAt,
+    });
+  } catch (e) { fail(res, e); }
+});
+
+/** 策略列表（附该版本最近一次五道闸结论） */
+app.get('/api/lab/strategies', async (req, res) => {
+  try {
+    const st = await storeDao.open({ readOnly: true });
+    const gr = await st.query('strategy_gate', { order: 'date', desc: true, limit: 1000 });
+    const byKey = new Map();
+    for (const g of gr) {
+      const k = `${g.strategy_id}@${g.version}`;
+      if (!byKey.has(k)) {
+        byKey.set(k, {
+          verdict: g.verdict, date: g.date,
+          gates: (g.payload && g.payload.gates) || null,
+        });
+      }
+    }
+    const list = strategies.list().map((s) => Object.assign({}, s, {
+      gate: byKey.get(`${s.id}@${s.version}`) || null,
+    }));
+    ok(res, { total: list.length, list });
+  } catch (e) { fail(res, e); }
+});
+
+/** 新建/更新策略；含高危未来函数直接 400 拒绝 */
+app.post('/api/lab/strategies', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const sc = await lab.scan(b.source || '');
+    if (sc.level === 'high') {
+      return res.status(400).json({
+        ok: false, error: '含未来函数，禁止保存', findings: sc.findings,
+      });
+    }
+    const s = await strategies.save(Object.assign({}, b, { scanLevel: sc.level }));
+    ok(res, s);
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+/** 某日信号 */
+app.get('/api/lab/signals', async (req, res) => {
+  try {
+    const date = req.query.date || (await ds.latestTradingDay()).date;
+    ok(res, { date, list: await track.listSignals(date, { readOnly: true }) });
+  } catch (e) { fail(res, e); }
+});
+
+/** 跟踪曲线：实盘 vs 回测 */
+app.get('/api/lab/track', async (req, res) => {
+  try {
+    const id = req.query.strategyId;
+    if (!id) return res.status(400).json({ ok: false, error: 'strategyId 必填' });
+    const w = await track.winRate(id, { readOnly: true });
+    const s = strategies.get(id);
+    ok(res, {
+      strategyId: id,
+      list: await track.listByStrategy(id, { readOnly: true }),
+      liveWinRate: w.liveWinRate,
+      sample: w.sample,
+      backtestWinRate: s && s.params && s.params.backtestWinRate != null ? s.params.backtestWinRate : null,
+      degraded: !!s && s.status === 'suspect',
+    });
+  } catch (e) { fail(res, e); }
+});
+
+let _pyCache = { at: 0, value: null };
+async function pythonHealth() {
+  if (_pyCache.value && Date.now() - _pyCache.at < 5 * 60 * 1000) return _pyCache.value;
+  const v = await py.probePython();
+  _pyCache = { at: Date.now(), value: v };
+  return v;
+}
+
+/** 健康检查：数据源 + 存储 + 待对账数 + 资产健康/熔断 + Python 环境 */
 app.get('/api/health', async (req, res) => {
   try {
     const storeInfo = await storeDao.info({ readOnly: true });
@@ -471,7 +720,9 @@ app.get('/api/health', async (req, res) => {
     ok(res, {
       version: pkg.version,
       storage: storeInfo,
-      sources: dsHealth,
+      // 上游库健康 + 板块资产注册表健康/熔断（10 §4.3），tripped 非空时前端要提示降级
+      sources: Object.assign({}, dsHealth, { assets: sourceHub.snapshot() }),
+      python: await pythonHealth(),
       pendingReconcile: pending,
       uptimeSec: Math.round(process.uptime()),
     });
@@ -482,6 +733,8 @@ app.get('/api/health', async (req, res) => {
 app.get('/today', (req, res) => res.sendFile(path.join(__dirname, 'public', 'today.html')));
 app.get('/watch', (req, res) => res.sendFile(path.join(__dirname, 'public', 'watch.html')));
 app.get('/lab', (req, res) => res.sendFile(path.join(__dirname, 'public', 'lab.html')));
+// 板块详情下钻（06 §2.3②），必须注册在 catch-all 之前
+app.get('/sector/:code', (req, res) => res.sendFile(path.join(__dirname, 'public', 'sector.html')));
 
 app.use('/api', (req, res) => res.status(404).json({ ok: false, error: '接口不存在' }));
 app.get('/screen', (req, res) => res.sendFile(path.join(__dirname, 'public', 'screen.html')));
@@ -490,3 +743,9 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 app.listen(PORT, '0.0.0.0', () => {
   console.log('QuantLab 已启动: http://localhost:' + PORT);
 });
+
+// 数据源探活（10 §4.3）：Web 常驻进程每 5 分钟一次，不单设 cron；
+// unref 保证不阻止进程退出；熔断冷却期内的源会被 probe 自动跳过。
+setInterval(() => {
+  sourceHub.probe().catch((e) => console.warn('[probe] ' + e.message));
+}, config.sources.probeIntervalMin * 60 * 1000).unref();
