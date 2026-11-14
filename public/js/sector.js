@@ -335,7 +335,9 @@
     $('member-list').innerHTML = list.length
       ? list.map((c) => {
           const code = String(c == null ? '' : c);
-          return '<li><a href="/?code=' + encodeURIComponent(code) + '">' + esc(code) + '</a></li>';
+          // data-back：点进分析台后能用「← 返回」回到这个板块页的原滚动位置（06 §5.2）
+          return '<li><a href="/?code=' + encodeURIComponent(code)
+            + '" data-back="sector">' + esc(code) + '</a></li>';
         }).join('')
       : '<li class="member-empty">— 暂无成分股数据 —</li>';
   }

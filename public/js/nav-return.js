@@ -58,10 +58,8 @@
     }
   }, true);
 
-  // 浏览器前进/后退（含 bfcache）也记录一次，避免漏存
-  window.addEventListener('pagehide', function () {
-    if (document.visibilityState === 'hidden') return;   // 切标签页不算离开
-  });
+  // 说明：不做 pagehide 自动 capture。返回态只在「点了带 data-back 的下钻链接」时记录，
+  // 否则从任意页面切走都会写一条记录，「← 返回」会指到不该去的地方。
 
   function applyExtra(extra) {
     if (!extra) return;
