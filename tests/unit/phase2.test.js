@@ -33,6 +33,17 @@ function bars(n, closeAt, volTail, volHead, highAt) {
   }
   return rows;
 }
+/** 按收盘价函数造 K 线，用于风险判定这类「走势形态」用例 */
+function series(n, closeFn) {
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const c = closeFn(i);
+    rows.push([`2026-03-${String((i % 28) + 1).padStart(2, '0')}`, c, c, c, c, 100, 100000 + i]);
+  }
+  return rows;
+}
+const TH = { breakMa: 20, weakenMa: 10, reduceChgPct: -5 };
+
 function feat(over) {
   return Object.assign({
     insufficient: false,
@@ -266,6 +277,44 @@ async function atest(name, fn) {
       config.__root = old;
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  /* ---------------- ⑤ 风险格：riskOf 纯函数（06 §2.3） ---------------- */
+
+  test('riskOf：收盘跌破 MA20 → 破位', () => {
+    const bars = series(30, (i) => (i < 25 ? 20 : 10));   // 末段跳水，必然跌破两条均线
+    const r = wp.riskOf(bars, TH);
+    assert.ok(r.hits.some((h) => h.k === '破位'), '未识别破位：' + JSON.stringify(r.hits));
+  });
+
+  test('riskOf：收盘跌破 MA10 → 转弱', () => {
+    const bars = series(30, (i) => (i < 25 ? 20 : 10));
+    const r = wp.riskOf(bars, TH);
+    assert.ok(r.hits.some((h) => h.k === '转弱'), '未识别转弱');
+  });
+
+  test('riskOf：单日跌幅超阈值 → 减仓', () => {
+    const bars = series(30, (i) => (i < 29 ? 100 : 90));   // 最后一天 -10%
+    const r = wp.riskOf(bars, TH);
+    assert.ok(r.hits.some((h) => h.k === '减仓'), '未识别减仓：' + JSON.stringify(r.hits));
+    assert.ok(r.chgPct <= -9.9, '当日涨跌幅算错：' + r.chgPct);
+  });
+
+  test('riskOf：强势上涨的标的不误报风险', () => {
+    const bars = series(30, (i) => 10 + i * 0.5);
+    const r = wp.riskOf(bars, TH);
+    assert.strictEqual(r.hits.length, 0, '不该有风险项：' + JSON.stringify(r.hits));
+  });
+
+  test('riskOf：K 线不足 21 根 → 返回 null（不是「没风险」）', () => {
+    assert.strictEqual(wp.riskOf(series(12, () => 10), TH), null);
+  });
+
+  test('riskOf：阈值来自传入参数，不是写死的 20/10/-5', () => {
+    const bars = series(30, (i) => (i < 25 ? 20 : 18));
+    const loose = wp.riskOf(bars, { breakMa: 20, weakenMa: 10, reduceChgPct: -50 });
+    const strict = wp.riskOf(bars, { breakMa: 20, weakenMa: 10, reduceChgPct: 50 });
+    assert.ok(strict.hits.length > loose.hits.length, '阈值改动应改变判定结果');
   });
 
   console.log(`\n${fail ? '✗' : '✓'} 二期纯函数：${pass} 通过 / ${fail} 失败`);

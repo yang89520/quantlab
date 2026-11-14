@@ -26,6 +26,7 @@ const localdb = require('../lib/sources/adapters/local-db');
 const track = require('../lib/track');
 const strategies = require('../lib/strategy');
 const gatesLib = require('../lib/gates');
+const lab = require('../lib/lab');
 
 function arg(name, def) {
   const i = process.argv.indexOf('--' + name);
@@ -251,6 +252,36 @@ async function main() {
   const pruned = await watchpool.prune(date);
   if (pruned.removed) log.info('daily-close.watchpool_pruned', pruned);
 
+  // ---- 8. 策略信号扫描（三期 S11，05 §7.1） ----
+  // 只扫 active/suspect 策略；suspect 仍继续记录，为了继续观察实盘是否恢复（05 §7.3）。
+  const signalRuns = [];
+  const runnable = strategies.list().filter((x) => x.status === 'active' || x.status === 'suspect');
+  for (const s of runnable) {
+    try {
+      const r = await lab.scanSignals(s, { date });
+      await track.record(date, s.id, s.version, r.signals, r.scanned);
+      signalRuns.push({
+        id: s.id, scanned: r.scanned, candidates: r.candidates,
+        hits: r.hitCount, skipped: r.skipped.length, missing: r.missing.length,
+      });
+    } catch (e) {
+      // 单个策略失败不影响其它策略与整体流程，但必须留痕（不许静默）
+      log.warn('daily-close.signal_scan_failed', { id: s.id, error: e.message });
+      signalRuns.push({ id: s.id, error: e.message });
+    }
+  }
+  if (signalRuns.length) log.info('daily-close.signals', { runs: signalRuns });
+
+  // ---- 8b. 持仓风险留痕（⑤ 风险格的「昨日 → 今日」对比依赖它） ----
+  let riskResult = null;
+  try {
+    riskResult = await watchpool.riskScan({ date });
+    await watchpool.saveRiskSnapshot(date, riskResult);
+    log.info('daily-close.risk_snapshot', { holding: riskResult.holding, risky: riskResult.risky });
+  } catch (e) {
+    log.warn('daily-close.risk_snapshot_failed', { error: e.message });
+  }
+
   // ---- 9. 信号跟踪回填（幂等补漏）+ 策略自动降级 ----
   const sess = idx.rows.map((r) => String(r[0]).slice(0, 10));
   const bf = await track.backfill(date, sess);
@@ -278,6 +309,14 @@ async function main() {
     + `｜降级 ${strengthRows.filter((r) => r.degraded).length} 个`
     + `｜主线 ${payload.mainline ? payload.mainline.sectors.length : 0} 个`);
   console.log(`观察池 ${poolResult.active} 只在池｜迁移 ${poolResult.moved} 次｜信号回填 ${bf.filled} 条｜降级 ${degraded} 个策略`);
+  if (signalRuns.length) {
+    const okRuns = signalRuns.filter((r) => !r.error);
+    const hits = okRuns.reduce((a, r) => a + r.hits, 0);
+    const failed = signalRuns.length - okRuns.length;
+    console.log(`策略信号 ${hits} 条（${okRuns.length} 个策略扫描完成`
+      + `${failed ? `，${failed} 个失败` : ''}）`
+      + (riskResult ? `｜持仓 ${riskResult.holding} 只、风险 ${riskResult.risky} 只` : ''));
+  }
   console.log(`对账 ${reconciled ? '已完成 1 条' : '无待办'}｜总耗时 ${Date.now() - t0}ms`);
 }
 

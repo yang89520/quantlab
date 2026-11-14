@@ -97,7 +97,45 @@
     "dynamicK": 20,
     "checkEveryDays": 20,
     "trackDays": [1, 5, 10],
-    "pythonTimeoutMs": 120000
+    "pythonTimeoutMs": 120000,
+    "maxConcurrent": 1,
+    "_note_maxConcurrent": "初始值。五道闸异步任务的并发上限：跑 50 只 × 4 道会吃满 CPU 与 Python 子进程，串行反而更快；超出上限的任务排队等待。",
+    "_note_checkEveryDays": "初始值。每 N 个交易日检查一次实盘命中率是否显著低于回测，低于 degradeGap 则自动降级 suspect。"
+  },
+
+  "cache": {
+    "enabled": true,
+    "dir": "data/cache",
+    "keepDays": 7,
+    "_note_keepDays": "初始值。二级缓存目录按自然日分，跨日必失效（D3）；只保留最近 N 天供排查与归档。"
+  },
+
+  "signals": {
+    "pool": 200,
+    "bars": 250,
+    "minBars": 60,
+    "_note_pool": "初始值。每日信号扫描的预筛池大小：取当日成交额前 N 只（05 §7.1 的形态层预筛，成本约为全市场的 1/25）。",
+    "_note_bars": "初始值。逐只回测读取的 K 线根数，需覆盖策略最长周期。"
+  },
+
+  "ui": {
+    "timing": {
+      "lowOpenPct": 0.02,
+      "_note_lowOpenPct": "初始值。③ 时机格的失效条件口径：信号标的次日多数低开超过该幅度即视为时机判错。"
+    },
+    "candidate": {
+      "startWindowDays": 3,
+      "maxPerGroup": 2,
+      "_note_startWindowDays": "初始值。④ 候选格失效条件：入池后该交易日数内未启动则降级。"
+    },
+    "risk": {
+      "breakMa": 20,
+      "weakenMa": 10,
+      "reduceChgPct": -5,
+      "_note_breakMa": "初始值。⑤ 风险格：收盘跌破该均线记「破位」。",
+      "_note_weakenMa": "初始值。收盘跌破该均线记「转弱」。",
+      "_note_reduceChgPct": "初始值。当日跌幅低于该百分数记「减仓」。"
+    }
   },
 
   "sources": {
