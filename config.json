@@ -110,6 +110,18 @@
     "_note_keepDays": "初始值。二级缓存目录按自然日分，跨日必失效（D3）；只保留最近 N 天供排查与归档。"
   },
 
+  "schedule": {
+    "catchUp": {
+      "enabled": true,
+      "afterHour": 16,
+      "afterMinute": 35,
+      "checkEveryMin": 10,
+      "_note": "收盘看门狗。首选仍是系统调度（tools/install-schedule.sh 装 launchd/打印 cron 行）；这里是兜底：cron 装不上、或某天 cron 没跑成，只要 Web 服务还活着，16:35 之后发现当天没有预判卡就补跑一次 daily-close。daily-close 幂等，多跑一次永远比漏跑一天安全。",
+      "_note_afterHour": "初始值 16:35，依据 docs/dev/01 §5「交易日 16:35」，与 cron 条目一致。何时校准：上游库入库时间变化时。",
+      "_note_checkEveryMin": "初始值 10 分钟。太密会反复探测数据库；太稀会让补跑延迟到深夜。"
+    }
+  },
+
   "signals": {
     "pool": 200,
     "bars": 250,

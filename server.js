@@ -13,6 +13,7 @@ const store = require('./lib/store');
 const scan = require('./lib/scan');
 const shapeLib = require('./public/js/shape');
 const config = require('./lib/config');
+const log = require('./lib/log');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -427,6 +428,33 @@ app.get('/api/predict/list', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+/**
+ * 上一交易日的预判卡（06 §2.3①「对比：昨日 → 今日」的数据源）。
+ *
+ * 为什么不让前端自己「今天减一天」：周五的上一交易日是周四，周一的上一交易日
+ * 是上周五，节假日还会更远。日期减法在前端做必然错，必须由库里真实的
+ * prediction.date 序列说了算。
+ *
+ * @query before YYYY-MM-DD（不含），默认取库里最新一条
+ */
+app.get('/api/predict/prev', async (req, res) => {
+  try {
+    const before = req.query.before;
+    if (before && !/^\d{4}-\d{2}-\d{2}$/.test(String(before))) {
+      return res.status(400).json({ ok: false, error: 'before 格式应为 YYYY-MM-DD' });
+    }
+    const st = await storeDao.open({ readOnly: true });
+    const rows = await st.query('prediction', { order: 'date', desc: true, limit: 400 });
+    const hit = rows.find((p) => !before || String(p.date).slice(0, 10) < String(before));
+    if (!hit) return ok(res, null);
+    // 顺带把这一天的对账结果带上：① 的对比要显示「昨日判 X，实际 Y」
+    const recs = await st.query('reconcile', { where: { date: hit.date } });
+    const payload = hit.payload || {};
+    if (recs.length && !payload.reconcile) payload.reconcile = recs[0].payload || null;
+    ok(res, payload);
+  } catch (e) { fail(res, e); }
+});
+
 /** 指定日期的预判卡（必须放在 /list 之后，否则 'list' 会被当成日期） */
 app.get('/api/predict/:date', async (req, res) => {
   try {
@@ -787,6 +815,24 @@ app.get('/api/lab/track', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+/** 累计命中率曲线：实盘逐日累计 vs 回测基准（06 §4.4 要求两条线） */
+app.get('/api/lab/track-curve', async (req, res) => {
+  try {
+    const id = req.query.strategyId;
+    if (!id) return res.status(400).json({ ok: false, error: 'strategyId 必填' });
+    const s = strategies.get(id);
+    if (!s) return res.status(404).json({ ok: false, error: '策略不存在' });
+    const c = await track.curve(id, { readOnly: true });
+    ok(res, {
+      strategyId: id,
+      points: c.points,
+      total: c.total,
+      backtestWinRate: s.params && s.params.backtestWinRate != null ? s.params.backtestWinRate : null,
+      degraded: s.status === 'suspect',
+    });
+  } catch (e) { fail(res, e); }
+});
+
 let _pyCache = { at: 0, value: null };
 async function pythonHealth() {
   if (_pyCache.value && Date.now() - _pyCache.at < 5 * 60 * 1000) return _pyCache.value;
@@ -876,3 +922,75 @@ app.listen(PORT, '0.0.0.0', () => {
 setInterval(() => {
   sourceHub.probe().catch((e) => console.warn('[probe] ' + e.message));
 }, config.sources.probeIntervalMin * 60 * 1000).unref();
+
+/* ---------------- 收盘看门狗（兜底，不是首选） ----------------
+ *
+ * 首选仍然是系统调度：`sh tools/install-schedule.sh` 装 launchd，
+ * 或 `--print` 拿到等价的 cron 行。但这两条路都有装不上的情况
+ * （实测本机 macOS 的 TCC 把 `crontab` 挡成 "operation not permitted"，
+ *  `launchctl bootstrap` 在受限环境里报 Input/output error）。
+ * 一旦没有任何调度，库里就永远是那一天的数据 —— 闭环直接停摆。
+ *
+ * 所以再加一层：只要服务在跑，每天 16:35 之后检查「今天有没有预判卡」，
+ * 没有就补跑一次 daily-close。
+ *
+ * 为什么可以这么兜：daily-close 是幂等的（全 upsert），多跑一次不会产生
+ * 重复数据；而漏跑一天，那一天的对账就永久缺失（02 §519）。
+ * 与 cron 共存也安全 —— 已有当天预判卡时这里直接返回，不会重复执行。
+ */
+const { spawn } = require('child_process');
+let catchUpRunning = false;
+
+async function catchUpTick() {
+  const cfg = (config.schedule || {}).catchUp || {};
+  if (cfg.enabled !== true) return;
+  if (catchUpRunning) return;
+
+  // 只在「今天是交易日且已过收盘时间」时才考虑补跑。
+  // 用 latestTradingDay() 而不是 todayStr()：节假日它不是今天，自然跳过。
+  const mins = new Date().getHours() * 60 + new Date().getMinutes();
+  if (mins < (Number(cfg.afterHour) || 16) * 60 + (Number(cfg.afterMinute) || 35)) return;
+
+  const today = ds.todayStr();
+  let trading = null;
+  try {
+    trading = (await ds.latestTradingDay()).date;
+  } catch (e) {
+    log.warn('catchup.date_failed', { error: e.message });
+    return;
+  }
+  if (trading !== today) return;          // 今天不是交易日（或上游还没今天的数据）
+
+  try {
+    const db = await storeDao.open({ readOnly: true });
+    const rows = await db.query('prediction', { where: { date: today } });
+    if (rows.length) return;              // 今天已有预判卡，无需补跑
+  } catch (e) {
+    // 读不到就不猜：宁可下一轮再试，也不要在状态不明时启动任务
+    log.warn('catchup.check_failed', { error: e.message });
+    return;
+  }
+
+  catchUpRunning = true;
+  log.warn('catchup.start', { date: today, note: '当天还没有预判卡，补跑 daily-close' });
+  const child = spawn(process.execPath, [path.join(__dirname, 'tools', 'daily-close.js')], {
+    cwd: __dirname, stdio: 'ignore',
+  });
+  child.on('close', (code) => {
+    catchUpRunning = false;
+    if (code === 0) log.info('catchup.done', { code });
+    else log.error('catchup.failed', { code });
+  });
+  child.on('error', (e) => {
+    catchUpRunning = false;
+    log.error('catchup.spawn_failed', { error: e.message });
+  });
+}
+
+if ((config.schedule || {}).catchUp && config.schedule.catchUp.enabled === true) {
+  const every = Math.max(1, Number(config.schedule.catchUp.checkEveryMin) || 10) * 60 * 1000;
+  setInterval(() => { catchUpTick().catch(() => {}); }, every).unref();
+  // 启动 10s 后先查一次：服务重启（比如刚补跑完回来）时能立刻收敛
+  setTimeout(() => { catchUpTick().catch(() => {}); }, 10000).unref();
+  log.info('catchup.armed', { everyMin: every / 60000 });
+}
