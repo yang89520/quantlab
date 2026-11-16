@@ -355,13 +355,80 @@ QuantLab │ 今日一页 · 观察池 · 策略实验室 │ 分析台 · 选�
 | 窄屏默认全收起 | `public/js/today.js` `setupFolds()` | `FOLD_KEYS` 七项，`classList.toggle('is-collapsed', isMobile)`；桌面端反过来全部展开，按钮由 CSS 隐藏 |
 | 收起只留结论 | `public/css/today.css` `@media (max-width:767px)` | `.cell.is-collapsed > .real-body > :not(.verdict){display:none}`；结论副标题 `-webkit-line-clamp:2` |
 | 2 屏内看完 | 同上 | 窄屏 `.cells{gap:6px}` / `.cell{padding:10px 12px}` / 空态 `.nodata-body` 最低高 44px |
-| 不出现横向滚动条 | `public/css/style.css` | 窄屏 `.hd-right{flex:1 1 100%;overflow-x:auto}`——它的 min-content 宽度（导航 277 + 评分环 124）会把文档撑出 16–47px |
+| 不出现横向滚动条 | `public/css/style.css` §6b / `public/css/ql.css` §28 | 窄屏 `.hd-right{flex-wrap:wrap}`（分析台/选股器）+ `.hd nav{flex-wrap:nowrap;overflow-x:auto}`（观察池/实验室/板块） |
+
+> **2026-11-16 修正（横向溢出兜法）**：上一版这里写的是窄屏 `.hd-right{overflow-x:auto}`。
+> 实测这是个坏兜法——容器被裁切但不给任何滚动提示，选股器的「刷新」按钮被推到
+> `x=328`（容器 347 宽），屏幕上只剩一个「刷」字。改为允许换行、只让导航自己横滚：
+> 按钮永远完整，最多两行。
+
+### 5.3.1 桌面与平板断点实测（2026-11-16）
+
+六页 × 八断点共 48 组合，用 Chrome CDP `Emulation.setDeviceMetricsOverride` 逐组合
+量 `documentElement.scrollWidth - clientWidth`，并统计 <30px 的可点元素：
+
+| 断点 | `/today` | `/watch` | `/lab` | `/` | `/screen` | `/sector/:code` |
+|---|---|---|---|---|---|---|
+| 375 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 414 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 640 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 768 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 1024 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 1280 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 1440 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 1920 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+**表内为横向溢出像素（0 = 无横向滚动条）。48/48 全部为 0，小触点 0 处。**
+
+桌面栅格（1440，今日一页）：① 环境 + ⑥ 对账 → 7/5 栏；② 主线 + ③ 时机 + ④ 候选 → 4/4/4；
+⑤ 风险 + ⑦ 明日 → 6/6。页面总高 2091（375px 下 1512，仍在 2×812 内）。
+
+### 5.3.2 三个只在宽屏才炸的坑（务必别再踩）
+
+**坑 1 · `main` 的两栏栅格被六个页面共用**
+
+`style.css` 里 `main{display:grid;grid-template-columns:318px minmax(0,1fr)}` 本来是
+**分析台专用**的两栏壳子（左侧栏 318 + 右主区），但六页的 `<main>` 都会吃到这条规则。
+今日一页若不显式重置，1440px 下七格全被塞进那 318px 的栏里，文字竖排成一列；
+而 `@media (max-width:1080px)` 会把 `main` 改回单列——于是**手机看着正常、桌面是坏的**，
+最难发现的那种坏法。修法：`.today-wrap{display:block}`（acceptance `C26` 守着）。
+
+**坑 2 · 给原生 `dialog` 设 `display:flex` 会盖掉关闭态**
+
+UA 样式是 `dialog:not([open]){display:none}`，特异性 0-1-1；`dialog.drawer{display:flex}`
+是 0-1-1 但后出现，直接盖掉。结果观察池/实验室页底部多出一整屏空白的「标的详情」框
+（实测页高 1569，加一条 `dialog.drawer:not([open]){display:none}` 后 853）。（`C27` 守着）
+
+**坑 3 · 头部有两套，改一套只修一半**
+
+`today/index/screen` 用 `<nav class="main-nav">`（规则在 `style.css`），
+`watch/lab/sector` 用裸 `<nav>`（规则在 `ql.css`）。
+375px 下 5 项共需 267px、可用 351px，但换行后「选股器」会孤零零掉到第二行。
+两套都要 `nowrap`。（`C32` 守着两处）
+
+### 5.3.3 触屏点击目标
+
+参考 WCAG 2.5.8（AA，24×24）与 2.5.5（AAA，44×44）。实测修复项：
+
+| 元素 | 修复前 | 修复后 | 位置 |
+|---|---|---|---|
+| 流派 tab | 28px 高 | 32px | `style.css` §6d |
+| 顶栏按钮 | 28px 高 | 32px | 同上 |
+| 图标按钮 `.icon-btn` | 22×22 | 32×32 | `style.css` §6d + `watchlist.css` |
+| 头部导航项 | 28px 高 | 32px | 同上（只加高，不加宽——375px 已无余量） |
+| 观察池行内「代码/评分/板块」 | 15–23px | 32px（`min-width:30px`） | `watch.css` |
+| 选股器行内按钮 `.lnk` | 31×22 | 32px | `screen.css`（≤767，含平板档） |
+| 板块页返回链接 | 119×29 | 32px | `sector.css` |
+| 状态下拉 / 复选框 | 27px / 14px | 34px / 18px | `screen.css` |
+
+`ql.css` 的 `nav a` 本来就是 `min-height:44px`，无需改。
+（`C28`/`C33` 守着）
 
 实测（Chrome，`Emulation.setDeviceMetricsOverride` 375×812，设备像素比 2）：
 
 | 页面 | 文档宽 | 横向溢出 | 七格总高 |
 |---|---|---|---|
-| `/today` | 375 | 0 | 七格 137×7，页面总高 1569 < 2×812=1624 |
+| `/today` | 375 | 0 | 七格 137×7，页面总高 1512 < 2×812=1624 |
 | `/watch` | 375 | 0 | — |
 | `/lab` | 375 | 0 | — |
 | `/sector/new_jrhy` | 375 | 0 | — |
