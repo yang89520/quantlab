@@ -353,6 +353,95 @@ function run(cmd, args, opts) {
     && /@media\(max-width:760px\)\{\s*\.icon-btn\{width:32px;height:32px\}/.test(read('public/css/watchlist.css')),
     '有触屏目标未撑到 32px');
 
+  // C34：闭环真的跑起来了 —— 这是最容易「测试全绿但其实没跑」的地方。
+  // 库里有快照、有预判，但对账 0 条，会让人以为系统正常：判断力画像永远空、
+  // ⑥ 对账格永远显示「尚未对账」。所以这条直接断言**对账样本天数**。
+  // 走 /api/judgment/stats 而不是自己开库：acceptance 与 Web 服务是两个进程，
+  // 同时开同一个 DuckDB 会互相抢锁（实测因此 fetch failed 过一次）。
+  const jResp = await get('/api/judgment/stats?days=30');
+  const jd = (jResp.body && jResp.body.data) || {};
+  ok('C34', '对账闭环有真实数据（对账样本 ≥ 10 天，不是 0 条空转）',
+    jResp.status === 200 && Number(jd.sampleDays) >= 10
+    && typeof jd.envHitRate === 'number',
+    `sampleDays=${jd.sampleDays} envHitRate=${jd.envHitRate}`);
+
+  // C35：归因链路必须给出不止一种结论。
+  // 全是 env 说明归因退化成「无论对错都怪环境」，方向/标的/时机那几档根本没被走过。
+  const byAttr = jd.byAttribution || {};
+  const attrKinds = ['env', 'direction', 'candidate', 'timing', 'hit']
+    .filter((k) => Number(byAttr[k]) > 0);
+  ok('C35', '归因分布覆盖多个档位（不是一律 env）',
+    attrKinds.length >= 2,
+    `命中 ${attrKinds.length} 类：${JSON.stringify(byAttr)}`);
+
+  // C36：README §8 承诺的 `tools/gate-run.js` CLI 入口。
+  // 这里只做静态检查（语法通 + 关键符号），**不真跑**：
+  // 跑它会写 strategy_gate，与服务进程抢 DuckDB 写锁。
+  const gateCheck = run(process.execPath, ['--check', 'tools/gate-run.js']);
+  let gateSrc = '';
+  try { gateSrc = read('tools/gate-run.js'); } catch (e) { gateSrc = ''; }
+  ok('C36', 'tools/gate-run.js 存在且可用（同步跑闸 + 落 S10）',
+    gateCheck.status === 0
+    && /computeGates/.test(gateSrc)
+    && /strategy_gate/.test(gateSrc)
+    && /--list/.test(gateSrc),
+    `exit=${gateCheck.status} len=${gateSrc.length}`);
+
+  // C37：合成快照必须带 derived 标记（D4 留痕）。
+  // 回补出来的快照和当场抓的快照肉眼无法区分，不标出来后人分不清「当时抓的」
+  // 和「事后算的」，而这直接决定这条对账数据能不能信。
+  const todayResp = await get('/api/predict/today');
+  const todayData = (todayResp.body && todayResp.body.data) || {};
+  const snapProv = (todayData.integrity && todayData.integrity.provenance
+    && todayData.integrity.provenance.snapshot) || {};
+  const dailyCloseSrc = read('tools/daily-close.js');
+  ok('C37', '合成快照带 derived 标记（回补日与实时日可区分）',
+    snapProv.derived === true
+    && Array.isArray(snapProv.nullFields) && snapProv.nullFields.length > 0
+    && /derived: !!\(snapRec && snapRec\.synthesized\)/.test(dailyCloseSrc),
+    `derived=${snapProv.derived} nullFields=${JSON.stringify(snapProv.nullFields)}`);
+
+  // C38：06 §4.4「必须画实盘 vs 回测两条线」。
+  // 之前只有跟踪 tab 的两根静态进度条，看不出「最近在变好还是变差」。
+  // 现在信号 tab 底部有累计曲线：接口给逐日累计序列，前端画折线 + 回测基准虚线。
+  const curveResp = await get('/api/lab/track-curve?strategyId=st_mwggh5rw');
+  const curveData = (curveResp.body && curveResp.body.data) || null;
+  const curvePts = (curveData && curveData.points) || [];
+  const curveLabJs = read('public/js/lab.js');
+  const curveLabHtml = read('public/lab.html');
+  ok('C38', '信号 tab 有累计命中率曲线（接口给序列 + 前端画两条线）',
+    curveResp.status === 200 && Array.isArray(curvePts)
+    && curvePts.every((p) => typeof p.cumLive === 'number' && p.date)
+    && /function drawCurve/.test(curveLabJs)
+    && /track-curve/.test(curveLabJs)
+    && /sig-curve/.test(curveLabHtml)
+    // 未到期不得计入分母：接口返回的 total 必须等于最后一点的 cumSample
+    && (curvePts.length === 0 || curvePts[curvePts.length - 1].cumSample === curveData.total),
+    `status=${curveResp.status} points=${curvePts.length}`);
+
+  // C39：① ② 的「昨日 → 今日」对比必须是真的（06 §2.3①②）。
+  // 这两格底部原来写死 `firstRun('没有昨日数据可对比')`：库里已经有 20 天预判时
+  // 它照样显示「首次运行」——把「没实现」伪装成「首天」。这种假空态比报错更糟，
+  // 因为没人会怀疑它。
+  const prevResp = await get('/api/predict/prev?before=' + encodeURIComponent(String(todayData.date || '')));
+  const prevData = (prevResp.body && prevResp.body.data) || null;
+  const todayJsSrc = read('public/js/today.js');
+  ok('C39', '① ② 的昨日对比是真实数据（上一交易日可查，非硬编码首日）',
+    prevResp.status === 200 && !!prevData && !!prevData.date && !!prevData.env
+    && /\/api\/predict\/prev/.test(todayJsSrc)
+    && /renderEnv\(pred, prev\)/.test(todayJsSrc)
+    && /renderMainline\(pred, sector, prev\)/.test(todayJsSrc),
+    `prev=${prevData && prevData.date} status=${prevResp.status}`);
+
+  // C40：一格渲染抛错不许拖垮整页。
+  // 实测踩过：② 里 `prev is not defined` 抛了 TypeError，结果 ③④⑤⑥⑦ 全部停在
+  // 静态空态，页面看起来「没数据」——实际是前端的锅，而且完全看不到错误。
+  ok('C40', '七格逐格隔离渲染（一格失败不影响其余，且不静默）',
+    /const safeRender = \(key, cellId, fn\)/.test(todayJsSrc)
+    && (todayJsSrc.match(/safeRender\('/g) || []).length === 7
+    && /window\.__qlErr/.test(todayJsSrc),
+    `safeRender 调用 ${(todayJsSrc.match(/safeRender\('/g) || []).length} 处`);
+
   const badDaily = run(process.execPath, ['tools/sector-report.js', '--date', 'not-a-date']);
   ok('D-4b', '失败任务非 0 退出', badDaily.status !== 0, `exit=${badDaily.status}`);
   const logFiles = filesIn('logs', '.log');
