@@ -10,14 +10,16 @@
     "start": "node server.js",
     "test": "node tools/smoke.js",
     "test:offline": "node tools/smoke.js --offline",
-    "test:unit": "node tests/unit/phase1.test.js && node tests/unit/phase2.test.js && node tests/unit/phase3.test.js && node tests/unit/cache.test.js && node tests/integration/reconcile.test.js && node tests/integration/phase2-direction.test.js && node tests/integration/datasource-rules.test.js && py/.venv/bin/python py/tdx_engine/selftest.py && node tests/integration/sector-index.test.js",
+    "test:unit": "node tests/unit/phase1.test.js && node tests/unit/phase2.test.js && node tests/unit/phase3.test.js && node tests/unit/cache.test.js && node tests/integration/reconcile.test.js && node tests/integration/phase2-direction.test.js && node tests/integration/datasource-rules.test.js && py/.venv/bin/python py/tdx_engine/selftest.py && node tests/integration/sector-index.test.js && node tests/integration/snapshot-backfill.test.js",
     "daily": "node tools/daily-close.js",
     "report": "node tools/pred-report.js",
     "sector": "node tools/sector-report.js",
     "test:today": "node tests/smoke-today.js",
     "test:mutate": "node tests/mutate/run.js",
     "acceptance": "node tests/acceptance.js",
-    "test:rules": "node tests/integration/datasource-rules.test.js"
+    "test:rules": "node tests/integration/datasource-rules.test.js",
+    "gate": "node tools/gate-run.js",
+    "backfill": "node tools/daily-close.js --backfill"
   },
   "keywords": [],
   "author": "",

@@ -8,9 +8,14 @@
  *
  * 用法：
  *   node tools/daily-close.js
- *   node tools/daily-close.js --date 2026-11-13
- *   node tools/daily-close.js --skip-fetch     # 用已有快照重跑
- *   node tools/daily-close.js --force          # 强制重算对账
+ *   node tools/daily-close.js --date 2026-11-13 --from-local   # 回补单个历史日（本地合成快照）
+ *   node tools/daily-close.js --backfill 20                    # 回补最近 20 个交易日（同进程循环）
+ *   node tools/daily-close.js --date 2026-11-13 --skip-fetch   # 用已有快照重跑
+ *   node tools/daily-close.js --force                          # 强制重算对账
+ *
+ * --backfill 为什么要在**同一个进程**里循环：板块成分股要打 221 次新浪接口，
+ * 20 天各起一个进程就是 4420 次请求，慢且容易被限流。同进程内 sectordata 会
+ * 复用第一次抓到的「字典 + 成分股」，整轮只打 221 次。
  */
 const store = require('../lib/dao');
 const ds = require('../lib/datasource');
@@ -46,31 +51,39 @@ async function collectCandidates() {
   return out;
 }
 
-async function main() {
+/**
+ * 处理单个交易日（步骤 2–10）。
+ *
+ * @param {string} date YYYY-MM-DD
+ * @param {{fromLocal?:boolean, skipFetch?:boolean, skipSector?:boolean,
+ *          force?:boolean, reuse?:boolean}} opt
+ * @returns {Promise<object>} 该日的摘要数字，供多日汇总打印
+ */
+async function runOne(date, opt) {
+  const o = opt || {};
+  const fromLocal = !!o.fromLocal;
+  const skipFetch = !!o.skipFetch;
+  const skipSector = !!o.skipSector;
+  const force = !!o.force;
   const t0 = Date.now();
-  log.info('daily-close.start', { argv: process.argv.slice(2) });
 
   const st = await store.open();
-  log.info('daily-close.store', { engine: st.engine });
-
-  // ---- 1. 交易日 ----
-  const overrideDate = typeof arg('date') === 'string' ? arg('date') : null;
-  const tday = overrideDate
-    ? { date: overrideDate, source: 'arg', level: 'C' }
-    : await ds.latestTradingDay();
-  const date = tday.date;
-  log.info('daily-close.date', { date, source: tday.source });
 
   // ---- 2. 指数 K 线（本地优先，只补当日） ----
-  const idx = await ds.resolve({ kind: 'kline-daily', code: 'sh000001', bars: 260 });
+  // 必须带 date：回补历史日时若不带，本地库会一路返回到最新一根，
+  // 预判就会用上「未来」的指数走势（前视偏差），算出来的判断看着漂亮但不成立。
+  const idx = await ds.resolve({ kind: 'kline-daily', code: 'sh000001', bars: 260, date });
   if (!idx.rows || idx.rows.length < config.integrity.minBars) {
-    throw new Error(`指数 K 线不足 ${config.integrity.minBars} 根（实际 ${idx.rows ? idx.rows.length : 0}），无法计算 MA60`);
+    throw new Error(`[${date}] 指数 K 线不足 ${config.integrity.minBars} 根（实际 ${idx.rows ? idx.rows.length : 0}），无法计算 MA60`);
   }
-  log.info('daily-close.bars', { bars: idx.rows.length, source: idx.source, asOf: idx.asOf });
+  log.info('daily-close.bars', { date, bars: idx.rows.length, source: idx.source, asOf: idx.asOf });
 
   // ---- 3. 快照 ----
   let snapRec = null;
-  if (!has('skip-fetch')) {
+  if (fromLocal) {
+    // 回补：从上游日线合成当日快照（不触网）。turnover/float_cap 上游没有，落 null。
+    snapRec = await snapLib.captureFromLocal(date);
+  } else if (!skipFetch) {
     snapRec = await snapLib.capture(date);
   } else {
     const s = await snapLib.readSummary(date);
@@ -80,7 +93,7 @@ async function main() {
 
   const summary = await snapLib.readSummary(date);
   if (!summary) {
-    throw new Error(`快照为空（date=${date}），无法生成预判。请先不带 --skip-fetch 跑一次。`);
+    throw new Error(`[${date}] 快照为空，无法生成预判。请先不带 --skip-fetch 跑一次。`);
   }
   log.info('daily-close.snapshot', {
     date, count: summary.count, breadth: summary.breadth, zt: summary.ztCount,
@@ -91,12 +104,20 @@ async function main() {
   // 预判的 mainline 也要用同一批榜单；所以这一步排在对账之前。
   // 04 §6 把板块排在对账之后，会导致 direction 拿不到当日榜单，此处按数据依赖修正。
   let strengthRows = [];
-  if (has('skip-sector')) {
+  if (skipSector) {
     strengthRows = await sectordata.readStrength(date, null, { readOnly: true });
     log.info('daily-close.sector_skipped', { date, rows: strengthRows.length });
   } else {
     try {
-      const sr = await sectordata.capture({ date });
+      // reuse：多日回补共用一份「板块字典 + 成分股」，整轮只打一次新浪接口。
+      // membersFrom='store'：连那一次都不打 —— 字典读盘、成分读库。
+      // 回补 20 天要 221 次成分股请求，实测连续跑会被新浪限流（timeout），
+      // 而成分本来就是「当前成分」（幸存者偏差见 10 §3.4），读库与联网同一口径。
+      const sr = await sectordata.capture({
+        date,
+        reuse: !!o.reuse,
+        membersFrom: o.membersFrom || 'network',
+      });
       strengthRows = sr.rows;
       log.info('daily-close.sector', {
         date, rows: strengthRows.length, insufficient: sr.insufficient.length,
@@ -122,7 +143,7 @@ async function main() {
     if (!target || target > date) continue;             // 目标日还没到
 
     const done = await st.query('reconcile', { where: { date: p.date } });
-    if (done.length && !has('force')) continue;         // 已对账（幂等）
+    if (done.length && !force) continue;                // 已对账（幂等）
 
     pendingCount++;
     const prevMap = await snapLib.readMap(p.date);
@@ -160,7 +181,7 @@ async function main() {
       skipReason: result.skipReason || null,
     });
   }
-  if (!pendingCount) log.info('daily-close.reconcile_none', { note: '没有到期的待对账预判（首次运行属正常）' });
+  if (!pendingCount) log.info('daily-close.reconcile_none', { date, note: '没有到期的待对账预判（首次运行属正常）' });
 
   // ---- 6. 生成今日预判 ----
   const existing = await st.query('prediction', { where: { date } });
@@ -184,10 +205,14 @@ async function main() {
       stale: !!(snapRec && snapRec.stale),
       degraded: !!(snapRec && snapRec.complete === false),
       count: summary.count,
+      // derived=true：这份快照是从上游日线合成的（回补），不是当场抓的实时源。
+      // 必须显式标出来，否则后人分不清「当时抓的」和「事后算的」（09 §D4）。
+      derived: !!(snapRec && snapRec.synthesized),
+      nullFields: (snapRec && snapRec.nullFields) || [],
     },
     fetchedAt: new Date().toISOString(),
   };
-  log.info('daily-close.provenance', provenance);
+  log.info('daily-close.provenance', { date, provenance });
 
   const payload = predict.build({
     date,
@@ -232,7 +257,7 @@ async function main() {
   if (activePool.length) {
     let klines = {};
     try {
-      klines = await localdb.readMemberKlines(activePool.map((e) => e.code), 30);
+      klines = await localdb.readMemberKlines(activePool.map((e) => e.code), 30, date);
     } catch (e) {
       log.warn('daily-close.pool_klines_failed', { error: e.message });
     }
@@ -270,14 +295,14 @@ async function main() {
       signalRuns.push({ id: s.id, error: e.message });
     }
   }
-  if (signalRuns.length) log.info('daily-close.signals', { runs: signalRuns });
+  if (signalRuns.length) log.info('daily-close.signals', { date, runs: signalRuns });
 
   // ---- 8b. 持仓风险留痕（⑤ 风险格的「昨日 → 今日」对比依赖它） ----
   let riskResult = null;
   try {
     riskResult = await watchpool.riskScan({ date });
     await watchpool.saveRiskSnapshot(date, riskResult);
-    log.info('daily-close.risk_snapshot', { holding: riskResult.holding, risky: riskResult.risky });
+    log.info('daily-close.risk_snapshot', { date, holding: riskResult.holding, risky: riskResult.risky });
   } catch (e) {
     log.warn('daily-close.risk_snapshot_failed', { error: e.message });
   }
@@ -298,29 +323,139 @@ async function main() {
       });
     }
   }
-  log.info('daily-close.track', { filled: bf.filled, noData: bf.noData, degraded });
+  log.info('daily-close.track', { date, filled: bf.filled, noData: bf.noData, degraded });
 
   // ---- 10. 摘要 ----
-  console.log('');
-  console.log(`日期 ${date} → 目标 ${payload.targetDate}｜${payload.env.verdict} ${payload.env.score} 分`
-    + `（趋势 ${payload.env.parts.trend} + 宽度 ${payload.env.parts.breadth} + 量能 ${payload.env.parts.vol}）`);
-  console.log(`快照 ${summary.count} 只｜宽度 ${(summary.breadth * 100).toFixed(1)}%｜涨停 ${summary.ztCount}｜候选 ${payload.candidates.length} 只`);
-  console.log(`板块 ${strengthRows.length} 个｜A 档 ${strengthRows.filter((r) => r.grade === 'A').length} 个`
-    + `｜降级 ${strengthRows.filter((r) => r.degraded).length} 个`
-    + `｜主线 ${payload.mainline ? payload.mainline.sectors.length : 0} 个`);
-  console.log(`观察池 ${poolResult.active} 只在池｜迁移 ${poolResult.moved} 次｜信号回填 ${bf.filled} 条｜降级 ${degraded} 个策略`);
-  if (signalRuns.length) {
-    const okRuns = signalRuns.filter((r) => !r.error);
-    const hits = okRuns.reduce((a, r) => a + r.hits, 0);
-    const failed = signalRuns.length - okRuns.length;
-    console.log(`策略信号 ${hits} 条（${okRuns.length} 个策略扫描完成`
-      + `${failed ? `，${failed} 个失败` : ''}）`
-      + (riskResult ? `｜持仓 ${riskResult.holding} 只、风险 ${riskResult.risky} 只` : ''));
+  return {
+    date,
+    targetDate: payload.targetDate,
+    verdict: payload.env.verdict,
+    score: payload.env.score,
+    parts: payload.env.parts,
+    snapCount: summary.count,
+    breadth: summary.breadth,
+    zt: summary.ztCount,
+    candCount: payload.candidates.length,
+    sectors: strengthRows.length,
+    sectorA: strengthRows.filter((r) => r.grade === 'A').length,
+    mainline: payload.mainline ? payload.mainline.sectors.length : 0,
+    poolActive: poolResult.active,
+    poolMoved: poolResult.moved,
+    signals: signalRuns,
+    risk: riskResult,
+    reconciled,
+    bfFilled: bf.filled,
+    degraded,
+  };
+}
+
+/** 多日回补时取最近 n 个交易日（升序） */
+async function recentTradingDays(n) {
+  const days = await localdb.sessionDates(n);
+  return days.slice(-n);
+}
+
+async function main() {
+  const t0 = Date.now();
+  log.info('daily-close.start', { argv: process.argv.slice(2) });
+
+  const overrideDate = typeof arg('date') === 'string' ? arg('date') : null;
+  const backfillN = arg('backfill') === true ? null : Number(arg('backfill'));
+
+  let dates;
+  let fromLocal = has('from-local');
+
+  if (backfillN) {
+    if (!Number.isFinite(backfillN) || backfillN < 1) {
+      throw new Error('--backfill 需要一个正整数，例如 --backfill 20');
+    }
+    dates = await recentTradingDays(Math.min(250, Math.floor(backfillN)));
+    // 回补一律走本地合成：历史日抓不到当时的实时快照，混用两种来源会让
+    // 命中率序列的口径不一致（同一指标只允许一套口径，G4）。
+    fromLocal = true;
+    log.info('daily-close.backfill', { days: dates.length, from: dates[0], to: dates[dates.length - 1] });
+  } else if (overrideDate) {
+    dates = [overrideDate];
+  } else {
+    const tday = await ds.latestTradingDay();
+    dates = [tday.date];
+    log.info('daily-close.date', { date: tday.date, source: tday.source });
   }
-  console.log(`对账 ${reconciled ? '已完成 1 条' : '无待办'}｜总耗时 ${Date.now() - t0}ms`);
+
+  // 回补模式必须显式给日期：不给就会拿「今天」去合成，而今天上游库通常还没有日线，
+  // 报错会很难懂。这里提前拦住，把用法说清楚。
+  if (fromLocal && !overrideDate && !backfillN) {
+    throw new Error('--from-local 必须配合 --date YYYY-MM-DD 或 --backfill N');
+  }
+
+  const st = await store.open();
+  log.info('daily-close.store', { engine: st.engine });
+
+  const opt = {
+    fromLocal,
+    skipFetch: has('skip-fetch'),
+    skipSector: has('skip-sector'),
+    force: has('force'),
+    reuse: dates.length > 1,
+    // 回补默认离线取成分：避免 221×N 次请求把新浪打到限流（实测会 timeout）。
+    // 想强制走网络加 --online-members。
+    membersFrom: (dates.length > 1 && !has('online-members')) ? 'store' : 'network',
+  };
+
+  const results = [];
+  for (const d of dates) {
+    // 逐日跑；某天失败不应让整轮回补中断——但要明确记下来，不许静默跳过（G3）
+    try {
+      results.push(await runOne(d, opt));
+    } catch (e) {
+      log.error('daily-close.day_failed', { date: d, error: e.message, stack: e.stack });
+      results.push({ date: d, error: e.message });
+    }
+  }
+
+  // ---- 汇总 ----
+  const ok = results.filter((r) => !r.error);
+  const bad = results.filter((r) => r.error);
+  console.log('');
+  if (results.length === 1 && ok.length === 1) {
+    const r = ok[0];
+    console.log(`日期 ${r.date} → 目标 ${r.targetDate}｜${r.verdict} ${r.score} 分`
+      + `（趋势 ${r.parts.trend} + 宽度 ${r.parts.breadth} + 量能 ${r.parts.vol}）`);
+    console.log(`快照 ${r.snapCount} 只｜宽度 ${(r.breadth * 100).toFixed(1)}%｜涨停 ${r.zt}｜候选 ${r.candCount} 只`);
+    console.log(`板块 ${r.sectors} 个｜A 档 ${r.sectorA} 个｜主线 ${r.mainline} 个`);
+    console.log(`观察池 ${r.poolActive} 只在池｜迁移 ${r.poolMoved} 次｜信号回填 ${r.bfFilled} 条｜降级 ${r.degraded} 个策略`);
+    const okRuns = r.signals.filter((x) => !x.error);
+    if (r.signals.length) {
+      const hits = okRuns.reduce((a, x) => a + x.hits, 0);
+      console.log(`策略信号 ${hits} 条（${okRuns.length} 个策略扫描完成）`
+        + (r.risk ? `｜持仓 ${r.risk.holding} 只、风险 ${r.risk.risky} 只` : ''));
+    }
+    console.log(`对账 ${r.reconciled ? '已完成 ' + r.reconciled + ' 条' : '无待办'}｜总耗时 ${Date.now() - t0}ms`);
+  } else {
+    console.log(`回补 ${dates.length} 个交易日：成功 ${ok.length} 天、失败 ${bad.length} 天｜总耗时 ${Date.now() - t0}ms`);
+    console.log('  日期        结论     分数  宽度    涨停  板块A  主线  对账  信号');
+    for (const r of results) {
+      if (r.error) {
+        console.log(`  ${r.date}  ✗ ${r.error.slice(0, 60)}`);
+        continue;
+      }
+      const hits = r.signals.filter((x) => !x.error).reduce((a, x) => a + x.hits, 0);
+      console.log(`  ${r.date}  ${String(r.verdict).padEnd(7)} ${String(r.score).padStart(4)}`
+        + `  ${(r.breadth * 100).toFixed(1).padStart(5)}%  ${String(r.zt).padStart(4)}`
+        + `  ${String(r.sectorA).padStart(5)}  ${String(r.mainline).padStart(4)}`
+        + `  ${String(r.reconciled).padStart(4)}  ${String(hits).padStart(4)}`);
+    }
+    const recTotal = ok.reduce((a, r) => a + r.reconciled, 0);
+    console.log(`  合计对账写入/更新 ${recTotal} 条`);
+    if (bad.length) {
+      console.log(`  失败日期：${bad.map((r) => r.date).join(', ')}`);
+      process.exitCode = 1;          // 有失败就以非 0 退出（G3）
+    }
+  }
 }
 
 main().catch((e) => {
   log.error('daily-close.failed', { error: e.message, stack: e.stack });
+  console.error('失败：' + e.message);
   process.exitCode = 1;   // 不许打印错误后正常退出（G3）
 });
