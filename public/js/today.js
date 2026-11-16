@@ -107,7 +107,7 @@
 
   /* ---------------- ① 环境 ---------------- */
 
-  function renderEnv(pred) {
+  function renderEnv(pred, prev) {
     const cell = $('cell-env');
     if (!pred) { cell.classList.add('nodata'); return; }
     cell.classList.remove('nodata');
@@ -189,16 +189,44 @@
       $('env-invalid-list').innerHTML = '<li style="color:var(--up2)">缺失失效条件（后端异常，请重跑预判）</li>';
     }
 
-    $('env-delta').innerHTML = firstRun('没有昨日数据可对比');
+    // 昨日 → 今日对比（06 §2.3① 要求「对比」）。原来这里是一句硬编码的
+    // 「首次运行 · 没有昨日数据可对比」——库里已经有 20 天预判时它照样显示，
+    // 属于把「没实现」伪装成「首次运行」。现在真的去比。
+    const prevEnv = (prev && prev.env) || null;
+    if (!prevEnv) {
+      $('env-delta').innerHTML = firstRun('没有上一交易日的预判可对比');
+    } else {
+      const pd = String(prev.date || '').slice(0, 10);
+      const pv = VERDICT_CN[prevEnv.verdict] || '—';
+      const ps = Number(prevEnv.score);
+      const cs = Number(env.score);
+      const diff = (Number.isFinite(ps) && Number.isFinite(cs)) ? cs - ps : null;
+      const diffTxt = diff == null ? '—'
+        : diff > 0 ? '+' + diff.toFixed(0)
+          : diff < 0 ? '−' + Math.abs(diff).toFixed(0) : '持平';
+      const cls = diff == null ? '' : diff > 0 ? 'good' : diff < 0 ? 'bad' : '';
+      // 昨日那张卡如果已经对过账，把「判得对不对」一起说清楚
+      const pr = prev.reconcile;
+      let hitTxt = '';
+      if (pr && !pr.skipped && pr.envResult && pr.envResult.hit != null) {
+        hitTxt = pr.envResult.hit
+          ? '，<span class="pass">昨日判断正确</span>'
+          : `，<span class="fail">昨日${esc(ATTR_CN[pr.attribution] || '判断有误')}</span>`;
+      }
+      $('env-delta').innerHTML = '<span>较 ' + esc(pd) + ' ' + esc(pv)
+        + ' ' + (Number.isFinite(ps) ? ps.toFixed(0) : '—') + ' 分</span>'
+        + '<span class="now ' + cls + '">' + esc(diffTxt) + '</span>' + hitTxt;
+    }
   }
 
   /* ---------------- ② 主线（判断型） ---------------- */
 
-  function renderMainline(pred, sector) {
+  function renderMainline(pred, sector, prev) {
     const cell = $('cell-mainline');
     const ml = pred && pred.mainline;
     // mainline === null → 保留 nodata「需二期功能」空态，不赋数据
     if (!ml) return;
+    cell.classList.remove('nodata');
     cell.classList.add('is-live');
 
     const bt = ml.byType || {};
@@ -249,7 +277,39 @@
       ? inv.map((x) => `<li>${esc(x.id || '')} ${esc(x.desc || '')}</li>`).join('')
       : '<li style="color:var(--up2)">缺失失效条件（后端异常，请重跑预判）</li>';
 
-    $('main-delta').innerHTML = firstRun('没有昨日 A 档名单可对比');
+    // 昨日 → 今日 A 档名单变化（06 §2.3② 要求「对比」）。
+    // 原来写死「首次运行 · 没有昨日 A 档名单可对比」，是没实现而不是首日。
+    const prevMl = (prev && prev.mainline) || null;
+    if (!prevMl) {
+      $('main-delta').innerHTML = firstRun('没有上一交易日的 A 档名单可对比');
+    } else {
+      const listOf = (m) => {
+        const bt2 = (m && m.byType) || {};
+        return [].concat(
+          isArr(bt2.industry) ? bt2.industry : [],
+          isArr(bt2.concept) ? bt2.concept : [],
+          isArr(m && m.sectors) ? m.sectors : [],
+        );
+      };
+      const prevA = new Map(listOf(prevMl).map((s) => [String(s.code), s.name || s.code]));
+      const curA = new Map(listOf(ml).map((s) => [String(s.code), s.name || s.code]));
+      const added = Array.from(curA.keys()).filter((c) => !prevA.has(c));
+      const dropped = Array.from(prevA.keys()).filter((c) => !curA.has(c));
+      const nameOf = (m, c) => m.get(c) || c;
+      const parts = [];
+      if (added.length) {
+        parts.push('<span class="pass">新增 ' + added.length + '</span>：'
+          + added.slice(0, 3).map((c) => esc(nameOf(curA, c))).join('、')
+          + (added.length > 3 ? ' 等' : ''));
+      }
+      if (dropped.length) {
+        parts.push('<span class="fail">掉出 ' + dropped.length + '</span>：'
+          + dropped.slice(0, 3).map((c) => esc(nameOf(prevA, c))).join('、')
+          + (dropped.length > 3 ? ' 等' : ''));
+      }
+      if (!parts.length) parts.push('与 ' + esc(String(prev.date || '').slice(0, 10)) + ' 相同（' + curA.size + ' 个）');
+      $('main-delta').innerHTML = '<span>较昨日</span><span class="now">' + parts.join('　') + '</span>';
+    }
   }
 
   /* ---------------- ③ 时机：今日触发的策略信号（判断型，06 §2.3 ③） ---------------- */
@@ -651,6 +711,12 @@
       safe('/api/watchpool/risk'),
     ]);
 
+    // 上一交易日的预判卡：① 环境与 ② 主线的「昨日 → 今日」对比要用（06 §2.3）。
+    // 由后端按库里真实的 prediction.date 序列取，前端不做日期减法（周末/节假日会算错）。
+    const prev = pred && pred.date
+      ? await safe(`/api/predict/prev?before=${encodeURIComponent(pred.date)}`)
+      : null;
+
     // ③ 时机格依赖当日信号与各策略的实盘回填，按预判日取（不是自然日）
     let signals = null;
     let tracks = null;
@@ -696,13 +762,35 @@
       + `快照 ${integ.snapshotCount == null ? '—' : integ.snapshotCount} 只标的`;
 
     // 先渲染七格，再统一标注"依据不完整"（此时 is-live 已就位）
-    renderEnv(pred);
-    renderMainline(pred, sector);
-    renderTiming({ date: pred.date, signals, strategies: strat, tracks, ui });
-    renderWatch({ date: pred.date, wp, transitions: trans && trans.list, ui });
-    renderRisk({ risk });
-    renderRecon(pred, stats);
-    renderPlan(pred);
+    //
+    // 逐格隔离：一格渲染抛错不该让后面五格全空。实测踩过一次——③ 的渲染
+    // 因为数据结构变动抛了 TypeError，结果 ③④⑤⑥⑦ 全部停在静态空态，
+    // 页面看起来"没数据"，实际是前端的锅。这里既隔离又暴露：错误进 console
+    // 和 window.__qlErr（不静默，G3），被拖垮的那格标红而不是装作没事。
+    const safeRender = (key, cellId, fn) => {
+      try {
+        fn();
+      } catch (e) {
+        window.__qlErr = window.__qlErr || [];
+        window.__qlErr.push({ cell: key, message: String(e && e.message || e) });
+        console.error('[today] ' + key + ' 渲染失败：', e);
+        const c = document.getElementById(cellId);
+        if (c) {
+          c.classList.add('nodata');
+          c.classList.remove('is-live');
+          const v = c.querySelector('.verdict');
+          if (v) v.textContent = '该格渲染失败：' + String(e && e.message || e).slice(0, 60);
+        }
+      }
+    };
+
+    safeRender('env', 'cell-env', () => renderEnv(pred, prev));
+    safeRender('mainline', 'cell-mainline', () => renderMainline(pred, sector, prev));
+    safeRender('timing', 'cell-timing', () => renderTiming({ date: pred.date, signals, strategies: strat, tracks, ui }));
+    safeRender('watch', 'cell-watch', () => renderWatch({ date: pred.date, wp, transitions: trans && trans.list, ui }));
+    safeRender('risk', 'cell-risk', () => renderRisk({ risk }));
+    safeRender('recon', 'cell-recon', () => renderRecon(pred, stats));
+    safeRender('plan', 'cell-plan', () => renderPlan(pred));
 
     if (incomplete) {
       cells.forEach((c) => {
