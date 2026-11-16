@@ -348,7 +348,12 @@ html.touch .sb-search input{font-size:16px;height:38px}
 html.touch .inline-new input,
 html.touch .rename-in,
 html.touch .sh-in{font-size:16px}
-html.touch .icon-btn{width:30px;height:30px;font-size:15px}
+/* 22×22 是鼠标尺寸，手指点不中；触屏档统一撑到 32×32 */
+html.touch .icon-btn{width:32px;height:32px;font-size:15px}
+/* 有些环境（Pad/部分安卓 WebView）不置 html.touch，靠宽度兜住 */
+@media(max-width:760px){
+  .icon-btn{width:32px;height:32px}
+}
 html.touch .sug{top:50px}
 html.touch .sug-item{min-height:44px;padding:10px 10px}
 html.touch .sug-item .a{opacity:1}

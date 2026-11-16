@@ -234,6 +234,17 @@ body.pnl-open .sc-fab{opacity:0;pointer-events:none}
   .sc-tbl tbody td.c-name{width:auto}
   .sc-tbl tbody td.c-name .nm{max-width:96px}
   .sc-tbl thead th,.sc-tbl tbody td{padding:8px 7px}
+
+  /* 触屏点击目标：下拉 27px、复选框 14px 都点不准，撑到可点大小 */
+  .tb-right select,.sc-toolbar select{min-height:34px;font-size:12px;padding:6px 8px}
+  .sc-panel input[type="checkbox"],.sc-panel input[type="radio"]{width:18px;height:18px}
+  .sc-panel label{min-height:34px;display:flex;align-items:center;gap:8px}
+}
+
+/* 行内文字按钮（实测 31×22）在平板档（640–767px）也是用手指点，
+   所以不能只在 ≤560px 撑大。桌面保持原尺寸，表格行高不受影响。 */
+@media (max-width:767px){
+  .lnk{min-height:32px;padding:0 6px}
 }
 
 /* ============================================================

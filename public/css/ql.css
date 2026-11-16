@@ -394,6 +394,10 @@ dialog::backdrop{background:rgba(4,6,10,.72);-webkit-backdrop-filter:blur(4px);b
 .opt:has(input:checked){border-color:var(--focus);background:rgba(107,165,255,.07)}
 
 /* ---------- 13. 抽屉（原生 dialog 侧滑，自带焦点陷阱与 ESC） ---------- */
+/* 关闭态必须先显式 display:none。下面给 dialog.drawer 设了 display:flex，
+   它的特异性高于 UA 的 `dialog:not([open]){display:none}` —— 结果抽屉关着也照渲染：
+   观察池页底部多出一整屏空白「标的详情」空框（实测 375/1440 都有）。 */
+dialog.drawer:not([open]){display:none}
 dialog.drawer{
   margin:0 0 0 auto;                 /* 靠右 */
   max-width:none;width:min(520px,100%);
@@ -663,3 +667,30 @@ footer{max-width:1280px;margin:0 auto;padding:0 var(--sp-4) var(--sp-6)}
 .ql-back:hover{background:var(--card3);border-color:var(--focus)}
 .ql-back:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 @media (max-width:520px){ .ql-back{right:12px;bottom:12px;padding:9px 12px} }
+
+/* ---------- 28. 窄屏头部导航：一行放下，放不下才横滚 ----------
+   375px 实测：.hd 内容宽 351px，5 项按 8px 14px / 13px 字要 390px，wrap 之后
+   「选股器」孤零零掉到第二行，看着像页面坏了。这里收紧内边距与字号把 5 项
+   压进一行；万一还放不下就让它自己横滚（露出半项本身就是「可以滑」的提示），
+   比换行掉一项更容易看懂。
+   注意：ql.css 的 `nav` 是裸元素选择器，只命中 watch/lab/sector 三页的
+   `<nav aria-label="主导航">`；today/index/screen 用的是 `.main-nav`（style.css）。 */
+@media (max-width:767px){
+  .hd{gap:var(--sp-2)}
+  .hd nav{flex-wrap:nowrap;min-width:0;overflow-x:auto;scrollbar-width:none}
+  .hd nav::-webkit-scrollbar{display:none}
+  .hd nav a{padding:8px 9px;font-size:12.5px}
+  .hd-status{margin-left:0;flex:1 1 100%}
+}
+@media (max-width:400px){
+  .hd nav a{padding:8px 7px;font-size:12px}
+}
+
+/* 状态下拉条（6 个状态共 605px）在 341px 容器里必然要横滚。
+   右侧渐隐一格，让「还有内容」这件事看得出来；不可滚时渐隐区是空白底，无副作用。 */
+@media (max-width:767px){
+  .tabs{
+    -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 22px),transparent 100%);
+    mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 22px),transparent 100%);
+  }
+}

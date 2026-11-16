@@ -24,8 +24,12 @@
 :focus:not(:focus-visible){outline:none}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
 
-/* 页面骨架 */
-.today-wrap{max-width:1280px;margin:0 auto;padding:20px 16px 48px}
+/* 页面骨架
+   display:block 是必需的：style.css 里 `main{display:grid;grid-template-columns:318px 1fr}`
+   是分析台的两栏壳子，今日一页的 <main> 也吃到了这条规则。
+   不重置的话，宽屏下七格被塞进 318px 那一栏，文字竖排成一列（375px 反而正常，
+   因为 style.css 在 ≤1080px 把 main 改成了单列——手机看着对、桌面是坏的）。 */
+.today-wrap{display:block;max-width:1280px;margin:0 auto;padding:20px 16px 48px}
 .today-hd{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .today-hd h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
 .today-hd p{font-size:var(--fs-xs);color:var(--tx3-fixed)}

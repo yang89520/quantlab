@@ -52,16 +52,34 @@
   ];
   // metrics 原始值表：逐项列出真实值
   const METRICS = [
-    { k: 'ret5', label: '5 日收益' },
-    { k: 'ret20', label: '20 日收益' },
-    { k: 'ma20', label: '20 日均线（MA20）' },
-    { k: 'amountPctile', label: '成交额分位' },
-    { k: 'volRatio', label: '量比（5 日 / 20 日）' },
-    { k: 'netInflowPctile', label: '净流入分位' },
-    { k: 'upRatio', label: '上涨占比' },
-    { k: 'ztCount', label: '涨停家数' },
-    { k: 'daysAboveMa20', label: '站上 MA20 天数' },
+    { k: 'ret5', label: '5 日收益', fmt: 'pct' },
+    { k: 'ret20', label: '20 日收益', fmt: 'pct' },
+    { k: 'ma20', label: '20 日均线（MA20）', fmt: 'pts' },
+    { k: 'amountPctile', label: '成交额分位', fmt: 'pct' },
+    { k: 'volRatio', label: '量比（5 日 / 20 日）', fmt: 'x' },
+    { k: 'netInflowPctile', label: '净流入分位', fmt: 'pct' },
+    { k: 'upRatio', label: '上涨占比', fmt: 'pct' },
+    { k: 'ztCount', label: '涨停家数', fmt: 'int' },
+    { k: 'daysAboveMa20', label: '站上 MA20 天数', fmt: 'int' },
   ];
+
+  /**
+   * metrics 显示格式。API 给的是原始比值（ret5=0.0656 表示 6.56%），
+   * 直接 String(v) 会渲染出 28502.404574549233 这种一长串小数，
+   * 既读不出量级也看不出单位。这里只做「同一个数换写法」，不改口径：
+   * 原始值原样放进 title，鼠标悬停可核对（07 数据可追溯）。
+   */
+  function fmtMetric(fmt, v) {
+    const n = toNum(v);
+    if (n == null) return '—';
+    switch (fmt) {
+      case 'pct': return (n * 100).toFixed(2) + '%';
+      case 'pts': return n.toFixed(2);
+      case 'x': return n.toFixed(2) + '×';
+      case 'int': return String(Math.round(n));
+      default: return String(n);
+    }
+  }
 
   /* ---------------- 取 URL 参数 ---------------- */
 
@@ -151,7 +169,13 @@
     gb.className = 'grade-badge ' + (g ? 'grade-' + g.toLowerCase() : 'grade-none');
 
     $('sec-type').textContent = '类型：' + typeCn(sec.type);
-    $('sec-date').textContent = '数据时点：' + (sec.date != null && sec.date !== '' ? String(sec.date) : '—');
+    // stale=true：当天还没跑收盘流程，给的是库内最新一天。
+    // 必须写在「数据时点」旁边，否则用户会拿旧榜当今天的榜看（D3）。
+    const staleTag = sec.stale
+      ? ' · 今日未更新（收盘后自动刷新）'
+      : '';
+    $('sec-date').textContent = '数据时点：'
+      + (sec.date != null && sec.date !== '' ? String(sec.date) : '—') + staleTag;
   }
 
   /* ---------------- 概览：分数 + 是否今日主线 + 降级角标 ---------------- */
@@ -309,7 +333,9 @@
     $('metric-tbody').innerHTML = METRICS.map((it) => {
       const v = m[it.k];
       const missing = isMissing(v);
-      const text = missing ? '—' : String(v);
+      // title 留原始值：显示可以好看，但必须能点回去核对（07 数据可追溯）
+      const raw = missing ? '' : String(v);
+      const text = fmtMetric(it.fmt, v);
       let cls = 'r raw-val';
       if (missing) cls += ' muted';
       else if (it.k === 'ret5' || it.k === 'ret20') {
@@ -320,7 +346,9 @@
       return '<tr>'
         + '<th scope="row">' + esc(it.label) + '</th>'
         + '<td class="field-name"><code>' + esc(it.k) + '</code></td>'
-        + '<td class="' + cls + '">' + esc(text) + '</td>'
+        + '<td class="' + cls + '"'
+        + (missing ? '' : ' title="API 原始值：' + esc(raw) + '"')
+        + '>' + esc(text) + '</td>'
         + '</tr>';
     }).join('');
   }
@@ -401,7 +429,8 @@
     renderNotes(sec);
 
     $('statusbar').textContent = '数据已加载 · 数据时点 '
-      + (sec.date != null && sec.date !== '' ? String(sec.date) : '—');
+      + (sec.date != null && sec.date !== '' ? String(sec.date) : '—')
+      + (sec.stale ? '（今日未更新，收盘后自动刷新）' : '');
     $('errbox').hidden = true;
     $('empty-notfound').hidden = true;
     $('content').hidden = false;

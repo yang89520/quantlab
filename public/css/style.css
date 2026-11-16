@@ -287,17 +287,47 @@ pre .c{color:#4E5C72} pre .k{color:#FF7A8A} pre .s{color:#8DD6A8} pre .f{color:#
   .main-nav a{padding:4px 7px}
 }
 
-/* 6b. 窄屏头部：.hd-right（导航 + 指标 + 评分环）单独占一行并横向滚动。
-   不这么处理时，它的 min-content 宽度（导航 277 + 评分 124）在 375px 下会把
-   整个文档撑出 47px 的横向滚动条 —— 分析台/选股器都会中招。 */
+/* 6b. 窄屏头部：.hd-right（导航 + 指标 + 评分环 + 操作按钮）单独占一行。
+   它的 min-content 宽度（导航 277 + 评分 124）在 375px 下会把整个文档撑出 47px
+   的横向滚动条 —— 分析台/选股器都会中招。
+
+   这里**不用 overflow-x:auto 兜**：试过，结果选股器的「刷新」按钮被推到
+   可视区外、只剩一个「刷」字（容器裁切但不给任何提示，看起来就是坏的）。
+   改成允许换行 + 只让导航自己横向滚：按钮永远完整，行数最多两行。 */
 @media (max-width:767px){
   .hd{padding:10px 12px;gap:10px}
-  .hd-right{flex:1 1 100%;min-width:0;margin-left:0;gap:10px;
-    overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-  .hd-right::-webkit-scrollbar{display:none}
-  .hd-right>.main-nav{flex:0 0 auto;overflow:visible}
-  .hd-right>.score-wrap{flex:0 0 auto}
+  .hd-right{flex:1 1 100%;min-width:0;margin-left:0;gap:6px 10px;flex-wrap:wrap}
+  /* 子项默认不压缩：按钮/评分环被挤扁比换行难看得多 */
+  .hd-right>*{flex:0 0 auto}
+  /* 导航是唯一可以被压缩的项，压缩后自己横滚，不推动其它元素 */
+  .hd-right>.main-nav{flex:1 1 160px;min-width:0;overflow-x:auto;scrollbar-width:none}
+  .hd-right>.main-nav::-webkit-scrollbar{display:none}
   .score-txt .s{display:none}
+}
+
+/* 6c. 超窄屏（≤400px，iPhone SE/mini 这一档）：导航 5 项实测需要 304px，
+   可用只有 283px，会切掉最后半项（"选股器"只剩"选股"）。收紧内边距与字距
+   省出约 28px，让 5 项完整落在一行，而不是靠横向滚动藏起来。 */
+@media (max-width:400px){
+  .main-nav{gap:0}
+  .main-nav a{padding:4px 5px;font-size:11.5px}
+  .hd-right{gap:4px 8px}
+  /* 分析台这一行还要放评分环（124px），收紧后仍差 40px 左右。
+     这一步不硬撑：让导航换行成两行，比截断「选股器」或加横向滚动都更容易看懂。 */
+  .hd-right>.main-nav{flex-wrap:wrap;overflow:visible;row-gap:2px}
+}
+
+/* 6d. 触屏点击目标（参考 WCAG 2.5.5 的 44px 建议 / 2.5.8 的 24px 下限）。
+   实测 375px 下：流派 tab 高 28px、顶栏按钮高 28px、图标按钮 22×22。
+   手指点 28px 高的按钮已经要瞄，22×22 基本点不中。这里只在触屏档撑大，
+   桌面保持紧凑（鼠标不需要 44px）。 */
+@media (max-width:767px){
+  .tab{min-height:32px;padding:6px 12px}
+  .btn{min-height:32px}
+  .icon-btn{min-width:32px;min-height:32px}
+  /* 导航项实测 58×28。这里只加高度不加内边距 —— 水平空间在 375px 下
+     已经一分不剩（5 项要 304px，可用 283px），加左右内边距会把「选股器」挤掉。 */
+  .main-nav a{min-height:32px}
 }
 
 /* 7. 字号下限：消除 9–10.5px 小字，正文最小 12px；11px 仅徽标 */

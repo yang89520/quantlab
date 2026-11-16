@@ -119,6 +119,8 @@ a:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .sec-grid{grid-template-columns:1fr}
   .card-wide{grid-column:auto}
   .ov-tags{margin-left:0;align-items:flex-start}
+  /* 返回链接实测 119×29，窄屏下手指不好点 */
+  .back-link{min-height:32px;padding:6px 2px}
 }
 .card-hd-sub{margin-left:auto;font-size:var(--fs-xs);color:var(--tx3);font-weight:400}
 
