@@ -472,17 +472,38 @@ const watchpool = require('./lib/watchpool');
 const sourceHub = require('./lib/sources/index.js');
 
 const FOOTNOTE = '历史强度基于当前成分回算，长周期仅供参考（幸存者偏差）';
-const sectorDate = async (q) => q || (await ds.latestTradingDay()).date;
+
+/**
+ * 板块榜该取哪一天。
+ *
+ * 只写 `q || latestTradingDay().date` 是不够的：交易日 15:00 前（daily-close 还没跑）
+ * `latestTradingDay()` 返回的是「今天」，而今天没有强度数据 —— 板块页会整页
+ * 「未找到该板块」，② 主线点进去也是空的（实测 11-16 上午如此）。
+ *
+ * 因此：显式传日期就照用；不传则「先今天，取不到退到库内最新一天」，
+ * 并把 stale 标出来 —— 是旧数据就说旧数据，绝不冒充当日（D3）。
+ */
+async function resolveSectorDate(q) {
+  if (q) return { date: q, stale: false, askedFor: q };
+  const today = (await ds.latestTradingDay()).date;
+  const rows = await sectordata.readStrength(today, null, { readOnly: true });
+  if (rows.length) return { date: today, stale: false, askedFor: today };
+  const latest = await sectordata.latestStrengthDate({ readOnly: true });
+  if (latest) return { date: latest, stale: latest !== today, askedFor: today };
+  return { date: today, stale: false, askedFor: today };
+}
 
 /** 板块强度榜：行业/概念分两张榜返回，绝不混排 */
 app.get('/api/sector/strength', async (req, res) => {
   try {
-    const date = await sectorDate(req.query.date);
+    const { date, stale, askedFor } = await resolveSectorDate(req.query.date);
     const t = req.query.type;
     const type = (t === 'industry' || t === 'concept') ? t : null;
     const rows = await sectordata.readStrength(date, type, { readOnly: true });
     ok(res, {
       date, type: type || 'all', total: rows.length, footnote: FOOTNOTE,
+      // stale=true 表示「今天还没跑，给的是库内最新一天」；前端据此标「非当日」
+      stale, askedFor,
       industry: rows.filter((r) => r.type === 'industry'),
       concept: rows.filter((r) => r.type === 'concept'),
       degradedCount: rows.filter((r) => r.degraded).length,
@@ -502,7 +523,7 @@ app.get('/api/sector/history', async (req, res) => {
 /** 单板块详情：因子拆解 + 当日成分（成分来自落盘，不是现场抓的） */
 app.get('/api/sector/:code', async (req, res) => {
   try {
-    const date = await sectorDate(req.query.date);
+    const { date, stale, askedFor } = await resolveSectorDate(req.query.date);
     const rows = await sectordata.readStrength(date, null, { readOnly: true });
     const one = rows.find((r) => r.sector === req.params.code);
     if (!one) return ok(res, null);
@@ -511,7 +532,7 @@ app.get('/api/sector/:code', async (req, res) => {
       where: { date, sector: req.params.code }, order: 'code', limit: 1000,
     });
     ok(res, Object.assign({}, one, {
-      date,
+      date, stale, askedFor,
       members: members.map((m) => m.code),
       memberCount: members.length,
       footnote: FOOTNOTE,
