@@ -282,6 +282,77 @@ function run(cmd, args, opts) {
       && /sc\.breadthLow/.test(read('lib/predict.js')) && d5hits.length === 0,
     d5hits.length ? d5hits.slice(0, 3).join('\n      ') : '');
 
+  // C26：响应式体检（06 §5.3）。
+  // style.css 里 `main{display:grid;grid-template-columns:318px minmax(0,1fr)}` 是分析台专用的
+  // 两栏壳子，但六个页面的 <main> 都吃这条规则。今日一页若不显式 display:block，
+  // 宽屏下七格会被塞进 318px 那一栏，文字竖排成一列 —— 而 ≤1080px 时 style.css
+  // 会改回单列，于是「手机正常、桌面炸裂」，最难发现的那种坏法。
+  ok('C26', '今日一页不被分析台两栏栅格接管（桌面七格可铺满）',
+    /\.today-wrap\{display:block/.test(todayCss),
+    '缺少 .today-wrap{display:block}');
+
+  // C27：原生 dialog 的关闭态必须显式 display:none。
+  // ql.css 给 dialog.drawer 设了 display:flex，特异性高于 UA 的
+  // `dialog:not([open]){display:none}` —— 抽屉关着也照渲染，观察池/实验室页
+  // 底部会多出一整屏空白的「标的详情」框（实测页高 1569 → 853）。
+  const qlCss = read('public/css/ql.css');
+  ok('C27', '抽屉关闭态不占位（dialog.drawer:not([open]) 显式 none）',
+    /dialog\.drawer:not\(\[open\]\)\{display:none\}/.test(qlCss),
+    '缺少 dialog.drawer:not([open]){display:none}');
+
+  // C28：触屏点击目标（07 §4.4，参考 WCAG 2.5.5）。
+  // 行内「代码 / 评分 / 板块」原本只有 15–23px 高（实测 601288 那个链接 45×15），
+  // 手指点不准；下拉 27px、复选框 14px 同样点不中。
+  ok('C28', '触屏点击目标撑到可点尺寸（≥32px 行内链接 / ≥34px 表单控件）',
+    /min-height:32px/.test(read('public/css/watch.css'))
+    && /min-height:34px/.test(read('public/css/screen.css')),
+    'watch.css 或 screen.css 缺少触屏点击目标规则');
+
+  // C29：metrics 原始值必须过格式化。
+  // API 给的是原始比值，直接 String(v) 会渲染出 28502.404574549233 这种一长串小数，
+  // 既读不出量级也看不出单位。显示走 fmtMetric，原始值留在 title 上供核对。
+  ok('C29', '板块 metrics 数值格式化（原始值留在 title）',
+    /function fmtMetric/.test(read('public/js/sector.js'))
+    && /fmtMetric\(it\.fmt, v\)/.test(read('public/js/sector.js'))
+    && /API 原始值/.test(read('public/js/sector.js')));
+
+  // C30：跨市场同号必须分开取序列。
+  // 上游 kline_daily 里 000001 同时有 sh（上证指数 3700 点）与 sz（平安银行 11 元），
+  // 只按 code 过滤会把两条序列按日期交错塞进同一个数组，aggregate 的 prevClose
+  // 被来回覆盖，板块指数算出 ±30000%（实测金融行业 ret20 = 28502%）。
+  const localDbJs = read('lib/sources/adapters/local-db.js');
+  ok('C30', '成分股取数按 (market, code) 分离，不按 code 合并两条序列',
+    /byMk\.size > 1/.test(localDbJs)
+    && /code_market_collision/.test(localDbJs)
+    && /map\(\(x\) => x\.market\)|String\(row\.market\)/.test(localDbJs)
+    && /module\.exports = \{ sessionDates, readMemberKlines, withMarket \}/.test(localDbJs),
+    'local-db.js 未按 market 分离序列');
+
+  // C31：等权指数要挡住非交易性跳变（除权未复权 / 复牌 / 脏数据）。
+  ok('C31', '等权指数剔除超限单日样本（maxDailyChg 来自 config）',
+    /maxDailyChg/.test(read('lib/sources/adapters/aggregate.js'))
+    && cfg.sector.aggregate.maxDailyChg > 0,
+    'aggregate.js 或 config.json 缺少 maxDailyChg');
+
+  // C32：窄屏头部导航必须一行放下 5 项。
+  // 六个页面分两套头部：today/index/screen 用 `.main-nav`（style.css），
+  // watch/lab/sector 用裸 `<nav>`（ql.css）。两套都实测过：375px 下 5 项共 267px，
+  // 可用 351px。一旦让 nav 换行，「选股器」会孤零零掉到第二行，看着像页面坏了。
+  ok('C32', '窄屏头部导航一行容纳 5 项（两套头部都不换行）',
+    /\.main-nav a\{min-height:32px\}/.test(styleCss)
+    && /\.hd nav\{flex-wrap:nowrap/.test(qlCss),
+    'style.css 或 ql.css 缺少窄屏导航规则');
+
+  // C33：触屏点击目标覆盖到「流派 tab / 图标按钮 / 行内文字按钮」。
+  // 实测 375px 下流派 tab 只有 28px 高、图标按钮 22×22、选股器行内按钮 31×22，
+  // 手指点不中（参考 WCAG 2.5.8 的 24px 下限）。
+  ok('C33', '触屏点击目标覆盖 tab / 图标按钮 / 行内按钮（均 ≥32px）',
+    /\.tab\{min-height:32px/.test(styleCss)
+    && /\.icon-btn\{min-width:32px;min-height:32px\}/.test(styleCss)
+    && /\.lnk\{min-height:32px/.test(read('public/css/screen.css'))
+    && /@media\(max-width:760px\)\{\s*\.icon-btn\{width:32px;height:32px\}/.test(read('public/css/watchlist.css')),
+    '有触屏目标未撑到 32px');
+
   const badDaily = run(process.execPath, ['tools/sector-report.js', '--date', 'not-a-date']);
   ok('D-4b', '失败任务非 0 退出', badDaily.status !== 0, `exit=${badDaily.status}`);
   const logFiles = filesIn('logs', '.log');
