@@ -10,7 +10,7 @@
     "start": "node server.js",
     "test": "node tools/smoke.js",
     "test:offline": "node tools/smoke.js --offline",
-    "test:unit": "node tests/unit/phase1.test.js && node tests/unit/phase2.test.js && node tests/unit/phase3.test.js && node tests/unit/cache.test.js && node tests/integration/reconcile.test.js && node tests/integration/phase2-direction.test.js && node tests/integration/datasource-rules.test.js && py/.venv/bin/python py/tdx_engine/selftest.py",
+    "test:unit": "node tests/unit/phase1.test.js && node tests/unit/phase2.test.js && node tests/unit/phase3.test.js && node tests/unit/cache.test.js && node tests/integration/reconcile.test.js && node tests/integration/phase2-direction.test.js && node tests/integration/datasource-rules.test.js && py/.venv/bin/python py/tdx_engine/selftest.py && node tests/integration/sector-index.test.js",
     "daily": "node tools/daily-close.js",
     "report": "node tools/pred-report.js",
     "sector": "node tools/sector-report.js",

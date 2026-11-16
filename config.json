@@ -57,7 +57,7 @@
     "breadth": { "upRatio": 0.8, "zt": 0.2, "ztFull": 5, "neutralUpRatio": 50 },
     "continuityDays": 20,
     "amountLookback": 250,
-    "aggregate": { "base": 1000, "minMembers": 5 },
+    "aggregate": { "base": 1000, "minMembers": 5, "maxDailyChg": 0.31 },
     "directionRank": 0.70,
     "mainlineTop": 3
   },
