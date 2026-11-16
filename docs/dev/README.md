@@ -188,16 +188,16 @@ npm test             # 现有 26 项回归
 │   │   ├── functions.py        已扩函数
 │   │   ├── signals.py
 │   │   ├── future_scan.py      已补漏检
-│   │   └── backtest.py         已剥离 pandas（或保留，见 05 §3.2）
-│   ├── runner.py               stdin/stdout JSON 协议
-│   ├── dbq.py                  降级方案：读 market.db 的子进程（可选，见 09 §8.7）
+│   │   ├── backtest.py         已剥离 pandas（或保留，见 05 §3.2）
+│   │   ├── runner.py           stdin/stdout JSON 协议
+│   │   └── selftest.py         纯函数自测（8 项，随 test:unit 跑）
 │   └── requirements.txt
-├── tools/daily-close.js        一期  收盘后编排入口
+├── tools/daily-close.js        一期  收盘后编排入口（支持 --backfill N 回补历史日）
 ├── tools/pred-report.js        一期  人读报告
-├── tools/migrate.js            一期  JSONL → DuckDB 一次性迁移
 ├── tools/archive.js            二期  旧年份手动归档
 ├── tools/sector-report.js      二期  板块报告
-├── tools/gate-run.js           三期  跑五道闸
+├── tools/gate-run.js           三期  跑五道闸（CLI，同步版）
+├── tools/install-schedule.sh   一期  装定时调度（launchd 优先，可打印 cron 行）
 ├── public/today.html           四期  今日一页
 ├── public/watch.html           四期  观察池
 ├── public/lab.html             四期  策略实验室
@@ -215,7 +215,11 @@ npm test             # 现有 26 项回归
 
 > **`data/ql.duckdb` 与上游 `market.db` 是两个文件**，绝不可混用。启动时断言两者路径不同。
 
-**测试**：新增 `tests/unit/`、`tests/integration/`、`tests/fixtures/`、`tests/mutate/`（结构见 `07` §3）。
+**测试**：新增 `tests/unit/`、`tests/integration/`、`tests/mutate/`（结构见 `07` §3）。
+夹具在用例内现造（临时 DuckDB / 内联数组），不落 `tests/fixtures/` 目录 —— 见 `07` §3.1 的说明。
+
+**两个已从清单移除的交付物**（原因见 `08` §4）：`tools/migrate.js`（一期就用的 DuckDB，
+从未产生过需要迁移的 JSONL）、`py/dbq.py`（`@duckdb/node-api` 一直可用，降级方案未触发）。
 
 **存量文件改动仅限**：
 `server.js`（加 `/api/predict` `/api/sector` `/api/lab` `/api/health` 路由）、

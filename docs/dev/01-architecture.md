@@ -184,6 +184,21 @@ Node 22 的 `node:sqlite` 仍是实验特性（需 `--experimental-sqlite`），
 35 16 * * 1-5  cd <项目目录> && node tools/daily-close.js >> logs/daily.log 2>&1
 ```
 
+**安装方式（按优先级）**
+
+| 优先级 | 方式 | 命令 | 说明 |
+|---|---|---|---|
+| 1 | launchd | `sh tools/install-schedule.sh` | macOS 推荐。睡眠期间错过的任务会在唤醒后补跑，且不需要 Full Disk Access |
+| 2 | cron | `sh tools/install-schedule.sh --print` 拿到行后粘进 `crontab -e` | 部分 macOS 机器上 `crontab` 被 TCC 挡成 `operation not permitted`，装不了 |
+| 3 | 看门狗（兜底） | `config.json` → `schedule.catchUp.enabled` | 只要 Web 服务在跑，16:35 之后发现当天没有预判卡就补跑一次 `daily-close` |
+
+> **2026-11-16 补**：原稿只写了「用系统 cron」。实际部署时遇到两个环境问题：
+> 本机 macOS 的 `crontab` 报 `operation not permitted`（TCC 拦截），
+> `launchctl bootstrap` 在受限环境里也报 `Input/output error`。
+> 结果是「代码齐了但一天新数据都没有」——预判只有 1 天、对账 0 条，闭环等于没跑。
+> 所以补了看门狗兜底：它不是替代调度，而是保证「调度装不上时也不会彻底停摆」。
+> 看门狗与 cron 共存安全：当天已有预判卡时直接返回，不会重复执行。
+
 **只有一个 cron 条目**。各段的先后顺序在 `daily-close.js` 内部保证（见 `03` §4 与 `04` §6）：
 
 ```
@@ -198,6 +213,26 @@ Node 22 的 `node:sqlite` 仍是实验特性（需 `--experimental-sqlite`），
 分成多条 cron 会有竞态（前一条没写完，后一条就起来读），所以仍然只有一条。
 
 `--sector` 等参数只用于调试补跑，不作为独立调度项。
+
+### 5.1 历史回补（`--backfill N`）
+
+新机器上线或调度停摆一段时间后，库里只有孤零零一两天数据，对账算不出来、
+命中率画像永远空着。这时用回补把闭环补齐：
+
+```bash
+node tools/daily-close.js --backfill 20      # 最近 20 个交易日，按日期升序
+```
+
+三条关键约束（都已落进代码，不是靠人记）：
+
+| 约束 | 做法 | 为什么 |
+|---|---|---|
+| 快照必须合成，不能抓实时 | `snapshot.captureFromLocal(date)` 从上游日线算 `chg_pct`/`amplitude` | 网络快照只有「此刻」。用 `capture(历史日)` 会把今天的行情标成历史日（D3），所以 `capture()` 现在对历史日**直接拒绝** |
+| 不许看到未来 | `readMemberKlines(codes, bars, until=date)`，指数 K 线 `resolve({date})` | 少传一个 `until`，板块榜和信号就会用上目标日之后的 K 线，回测结果漂亮但全是假的 |
+| 升序跑、同进程循环 | 单进程内按日循环，板块字典与成分股复用 | 成分股要打 221 次接口，20 天各起一个进程会被限流；实测已出现 `timeout`。改成字典读盘 + 成分读库，整轮 0 次网络请求 |
+
+> 回补出来的快照在 `integrity.provenance.snapshot.derived` 上标 `true`，
+> 与当场抓的快照可区分（`turnover` / `float_cap` 为 `null`，见 `08` TD7）。
 
 非交易日自动跳过（快照 `lastBarDate` 与当日不符即跳过），不需要维护节假日表。
 

@@ -563,6 +563,19 @@ async function latestTradingDay() {
 | 7 | 降级有标记 | 强制本地库不可用 → 断言返回值 `degraded=true` |
 | **8** | **不写上游库** | 断言所有 `marketDb` 连接均为 `readOnly:true`；`ownDb !== marketDb` |
 | **9** | **自有库可独立运行** | `engine=jsonl` 下跑完整一期流程不报错 |
+| **10** | **留痕一路到 UI** | 预判卡含 `integrity.provenance`；`test:today` 断言状态条含「来源」「时点」及真实日期 |
+| **11** | **历史日不许用实时快照冒充** | `snapshot.capture(历史日)` 必须抛错并提示走 `--from-local`；`tests/integration/snapshot-backfill.test.js` 用替身固定 `asOf` 后验证 |
+| **12** | **合成快照必须自证是合成的** | 回补日的 `provenance.snapshot.derived === true`，且 `nullFields` 列出 `turnover`/`float_cap`；验收 `C37` 逐日检查 |
+
+> **第 11 条是 2026-11-16 补的**：原实现用调用方传的 `date` 给快照行打标签，
+> 于是 `daily-close --date 2026-11-13` 会把**今天的行情写进 11-13**。
+> 这比「拿 T-1 冒充当日」（D-4）更隐蔽 —— 历史数据本来就该是旧的，
+> 没人会去怀疑一条 2026-11-13 的记录为什么带着今天的价格。
+> 现在：标签一律取数据的真实 `asOf`，请求日不一致就拒绝。
+>
+> **第 12 条是为了防止「合成」这件事本身不可追溯**：合成快照与实时快照在
+> 同一张表里、字段几乎一样，不标 `derived` 的话，三周后没人分得清哪天的
+> 换手率是空的、为什么空。
 
 ---
 
