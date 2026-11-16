@@ -228,6 +228,20 @@
           </table>
         </div>
         <div class="lab-empty" id="sig-empty" hidden>该日期 / 筛选条件下没有信号。</div>
+
+        <!-- 累计命中率曲线（06 §4.4：必须画「实盘 vs 回测」两条线，
+             只有一条线看不出策略在衰减）。选中具体策略才有意义，全部策略不画。 -->
+        <div class="lab-curve" id="sig-curve-wrap" hidden>
+          <h2 class="sect-h">累计命中率（T+1）</h2>
+          <svg id="sig-curve" viewBox="0 0 600 180" preserveAspectRatio="none"
+               role="img" aria-label="累计命中率曲线">
+          </svg>
+          <div class="legend-row">
+            <span><i style="background:#F6465D" aria-hidden="true"></i>实盘累计</span>
+            <span><i style="background:#6BA5FF" aria-hidden="true"></i>回测基准</span>
+          </div>
+          <p class="lab-note" id="sig-curve-note"></p>
+        </div>
       </div>
     </div>
 

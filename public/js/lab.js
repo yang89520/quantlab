@@ -836,6 +836,8 @@
     state.signalRows = rows;
     state.signalDate = dates.length === 1 ? dates[0] : (dates[0] + '_' + dates[dates.length - 1]);
     renderSignals(rows, { note: notes.join(' · ') });
+    // 曲线是附加视图：失败不拖垮信号表
+    renderCurve(strat).catch(function () { $('sig-curve-wrap').hidden = true; });
   }
   function renderSignals(rows, info) {
     $('sig-note').textContent = info && info.note ? info.note : '';
@@ -870,6 +872,108 @@
       tbody.appendChild(tr);
     });
   }
+  /* ============ 累计命中率曲线（06 §4.4：必须画实盘 vs 回测两条线） ============
+     只有一条线看不出策略在衰减：命中率 60% 可能是最近才掉下来的。
+     回测基准是常数（只有一个数），所以画成水平虚线，与实盘的逐日累计折线叠在一起。 */
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS(SVG_NS, tag);
+    if (attrs) Object.keys(attrs).forEach(function (k) { e.setAttribute(k, String(attrs[k])); });
+    return e;
+  }
+
+  function drawCurve(svg, pts, bt) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var W = 600, H = 180, padL = 46, padR = 12, padT = 12, padB = 26;
+    var vals = pts.map(function (p) { return p.cumLive; });
+    if (isNum(bt)) vals.push(Number(bt));
+    var mn = Math.min.apply(null, vals);
+    var mx = Math.max.apply(null, vals);
+    // 全相等或差别极小时给一个固定带宽，否则线会贴边或抖动成锯齿
+    if (mx - mn < 0.02) { mn = Math.max(0, mn - 0.02); mx = Math.min(1, mx + 0.02); }
+    var x = function (i) {
+      return pts.length === 1 ? (padL + (W - padL - padR) / 2)
+        : padL + (W - padL - padR) * i / (pts.length - 1);
+    };
+    var y = function (v) { return (H - padB) - (v - mn) / (mx - mn) * (H - padT - padB); };
+
+    [mx, (mx + mn) / 2, mn].forEach(function (v) {
+      var gy = y(v);
+      svg.appendChild(svgEl('line', {
+        x1: padL, y1: gy, x2: W - padR, y2: gy,
+        style: 'stroke:var(--line2);stroke-dasharray:3 4',
+      }));
+      var t = svgEl('text', { x: padL - 6, y: gy + 4, 'text-anchor': 'end', class: 'spark-yl' });
+      t.textContent = (v * 100).toFixed(0) + '%';
+      svg.appendChild(t);
+    });
+
+    if (isNum(bt)) {
+      svg.appendChild(svgEl('line', {
+        x1: padL, y1: y(Number(bt)), x2: W - padR, y2: y(Number(bt)),
+        style: 'stroke:var(--blue);stroke-width:1.5;stroke-dasharray:6 4',
+      }));
+    }
+
+    svg.appendChild(svgEl('polyline', {
+      points: pts.map(function (p, i) { return x(i) + ',' + y(p.cumLive); }).join(' '),
+      style: 'fill:none;stroke:var(--up);stroke-width:2;stroke-linejoin:round;stroke-linecap:round',
+    }));
+    pts.forEach(function (p, i) {
+      var c = svgEl('circle', {
+        cx: x(i), cy: y(p.cumLive), r: i === pts.length - 1 ? 4 : 2.5,
+        style: 'fill:' + (i === pts.length - 1 ? 'var(--up2)' : 'var(--up)') + ';stroke:var(--bg2);stroke-width:1',
+      });
+      var ttl = svgEl('title');
+      ttl.textContent = p.date + ' · 累计 ' + (p.cumLive * 100).toFixed(1)
+        + '%（当日 ' + (p.live * 100).toFixed(0) + '%，累计样本 ' + p.cumSample + '）';
+      c.appendChild(ttl);
+      svg.appendChild(c);
+    });
+
+    var l = svgEl('text', { x: padL, y: H - 6, class: 'spark-xl' });
+    l.textContent = pts[0].date;
+    svg.appendChild(l);
+    var r = svgEl('text', { x: W - padR, y: H - 6, 'text-anchor': 'end', class: 'spark-xl' });
+    r.textContent = pts[pts.length - 1].date;
+    svg.appendChild(r);
+
+    svg.setAttribute('aria-label', '累计命中率曲线：' + pts[0].date + ' 至 ' + pts[pts.length - 1].date
+      + '，共 ' + pts.length + ' 个交易日，最新累计 ' + (pts[pts.length - 1].cumLive * 100).toFixed(1) + '%'
+      + (isNum(bt) ? '，回测基准 ' + (Number(bt) * 100).toFixed(1) + '%' : '，该策略无回测基准'));
+  }
+
+  async function renderCurve(strategyId) {
+    var wrap = $('sig-curve-wrap');
+    if (!wrap) return;
+    if (!strategyId) {
+      // 「全部策略」不画：两条线必须是同一个策略的实盘与回测，混着画没有意义
+      wrap.hidden = true;
+      return;
+    }
+    var d;
+    try {
+      d = await api('/api/lab/track-curve?strategyId=' + encodeURIComponent(strategyId));
+    } catch (e) {
+      wrap.hidden = true;   // 附加视图失败不拖垮整页
+      return;
+    }
+    var pts = (d && d.points) || [];
+    var svg = $('sig-curve');
+    var note = $('sig-curve-note');
+    wrap.hidden = false;
+    if (pts.length < 2) {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      note.textContent = '累计曲线需要至少 2 个「已回填 T+1」的交易日（当前 ' + pts.length + ' 个）。';
+      return;
+    }
+    drawCurve(svg, pts, d.backtestWinRate);
+    note.textContent = '共 ' + pts.length + ' 个交易日、' + (d.total || 0) + ' 个已回填样本'
+      + (isNum(d.backtestWinRate)
+        ? '；回测基准 ' + (Number(d.backtestWinRate) * 100).toFixed(1) + '%'
+        : '；该策略没有回测基准');
+  }
+
   function csvCell(v) {
     var s = (v === null || v === undefined) ? '' : String(v);
     return '"' + s.replace(/"/g, '""') + '"';

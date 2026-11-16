@@ -179,3 +179,15 @@
     border-left:none;border-right:none;border-top:none;border-bottom:none;
   }
 }
+
+/* ---------- 信号 tab · 累计命中率曲线（06 §4.4） ----------
+   回测基准是常数（只有一个数），画成水平虚线叠在实盘折线上；
+   两条线同屏才看得出策略是不是在衰减。 */
+.lab-curve{margin-top:var(--sp-5);padding-top:var(--sp-3);border-top:1px solid var(--line)}
+.lab-curve .sect-h{margin-bottom:var(--sp-2)}
+#sig-curve{
+  display:block;width:100%;height:auto;aspect-ratio:600 / 180;
+  background:var(--card2);border:1px solid var(--line);border-radius:var(--r-md);
+}
+/* 与 sector.css 的同一组刻度样式保持一致（lab.html 不加载 sector.css） */
+.spark-yl,.spark-xl{fill:var(--tx3);font-size:12px;font-variant-numeric:tabular-nums}
