@@ -232,9 +232,9 @@ func main() {
 		var qs []tdx.Quote
 		t0 := time.Now()
 		err := C.with(func(c tdx.Client) error {
-			// 单次协议有上限，分片调用
-			for i := 0; i < len(codes); i += 200 {
-				j := i + 200
+			// 单次协议上限 80 只（超了库会报「预期N个，实际80个」）
+			for i := 0; i < len(codes); i += 80 {
+				j := i + 80
 				if j > len(codes) {
 					j = len(codes)
 				}
@@ -253,8 +253,9 @@ func main() {
 		out := make([]map[string]interface{}, 0, len(qs))
 		for _, q := range qs {
 			in := q.Instrument
-			// Instrument.Code 形如 "sh.600000"，转成我们用的 sh600000
-			code := strings.ReplaceAll(in.Code, ".", "")
+			// Instrument.Code 不含前缀，市场在 Exchange 里；
+			// 必须拼回 sh600000——000001 在沪深两市都有，只传 6 位会张冠李戴
+			code := exPrefix(in.Exchange) + in.Code
 			out = append(out, map[string]interface{}{
 				"code": code, "price": q.Price, "preClose": q.PreClose,
 				"open": q.Open, "high": q.High, "low": q.Low, "volume": q.Volume,
@@ -307,6 +308,76 @@ func main() {
 		}
 		ok(w, map[string]interface{}{
 			"indexMap": im, "blocks": blocks, "source": "tdx", "ms": time.Since(t0).Milliseconds(),
+		})
+	})
+
+	// 全市场快照：一次请求拿完，内部做「代码列表（带缓存）→ 分批报价 → 组装」
+	// GET /snapshot
+	//
+	// 为什么单独做一个端点而不是让 Node 自己拼 /codes + /quote：
+	// 代码列表要 3 次 GetCodeAll（约 5.5 秒），每天只变一次，缓存在网关里最省；
+	// 而且是 5.3 万个品种，过滤成 A 股 5500 只之后再传给 Node，省掉 90% 的搬运。
+	mux.HandleFunc("/snapshot", func(w http.ResponseWriter, r *http.Request) {
+		t0 := time.Now()
+		type row struct {
+			Code     string  `json:"code"`
+			Price    float64 `json:"price"`
+			PreClose float64 `json:"preClose"`
+			Open     float64 `json:"open"`
+			High     float64 `json:"high"`
+			Low      float64 `json:"low"`
+			Volume   int64   `json:"volume"`
+			Amount   float64 `json:"amount"`
+		}
+		var out []row
+		var codesN int
+		err := C.with(func(c tdx.Client) error {
+			codes := aShareCodes(c)
+			codesN = len(codes)
+			// 单批 80：这是通达信协议的单次报价上限，超了库直接报
+			// 「预期500个，实际80个」。5583 只 = 70 批，约 3 秒
+			const batch = 80
+			for i := 0; i < len(codes); i += batch {
+				j := i + batch
+				if j > len(codes) {
+					j = len(codes)
+				}
+				qs, err := c.GetQuote(codes[i:j]...)
+				if err != nil {
+					// 某一批失败不该丢掉整份快照，记录后继续
+					log.Printf("快照批次 %d-%d 失败: %v", i, j, err)
+					continue
+				}
+				for _, q := range qs {
+					mk := exPrefix(q.Instrument.Exchange)
+					if mk == "" {
+						continue // 市场不认识就不猜，免得把 000001 张冠李戴
+					}
+					rr := row{
+						Code: mk + q.Instrument.Code,
+						Price: q.Price, PreClose: q.PreClose,
+						Open: q.Open, High: q.High, Low: q.Low, Volume: q.Volume,
+					}
+					// 成交额只在内嵌 K 线里
+					if q.Standard != nil && q.Standard.Kline != nil {
+						rr.Amount = q.Standard.Kline.Amount
+					}
+					out = append(out, rr)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		if len(out) == 0 {
+			writeJSON(w, 503, map[string]interface{}{"ok": false, "error": "全市场快照为空"})
+			return
+		}
+		ok(w, map[string]interface{}{
+			"list": out, "count": len(out), "aShareCodes": codesN,
+			"source": "tdx", "ms": time.Since(t0).Milliseconds(),
 		})
 	})
 
@@ -397,4 +468,95 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("服务退出：%v", err)
 	}
+}
+
+/* ---------------- A 股代码列表（带缓存） ----------------
+ *
+ * GetCodeAll 返回的是「该市场全部品种」：sh 27894 条里绝大多数是指数、基金、
+ * 债券、权证和 999999 这类占位符，真正的 A 股只有 2000 多只。
+ * 5.3 万条全传给 Node 再过滤纯属浪费带宽，所以在网关侧就筛掉。
+ *
+ * 缓存 1 小时：新股上市会让列表变，但一天最多几次，没必要每次快照都拉 5.5 秒。
+ */
+
+var codeCache struct {
+	mu   sync.Mutex
+	at   time.Time
+	list []string
+}
+
+// isAShare 按号段判断是否 A 股个股（与 lib/snapshot.js 的 A_SHARE_WHERE 同一口径）
+func isAShare(market, code string) bool {
+	switch market {
+	case "sh":
+		return strings.HasPrefix(code, "600") || strings.HasPrefix(code, "601") ||
+			strings.HasPrefix(code, "603") || strings.HasPrefix(code, "605") ||
+			strings.HasPrefix(code, "688") || strings.HasPrefix(code, "689")
+	case "sz":
+		return strings.HasPrefix(code, "000") || strings.HasPrefix(code, "001") ||
+			strings.HasPrefix(code, "002") || strings.HasPrefix(code, "003") ||
+			strings.HasPrefix(code, "300") || strings.HasPrefix(code, "301") ||
+			strings.HasPrefix(code, "302")
+	case "bj":
+		return strings.HasPrefix(code, "4") || strings.HasPrefix(code, "8") ||
+			strings.HasPrefix(code, "92")
+	}
+	return false
+}
+
+func aShareCodes(c tdx.Client) []string {
+	codeCache.mu.Lock()
+	defer codeCache.mu.Unlock()
+	if len(codeCache.list) > 0 && time.Since(codeCache.at) < time.Hour {
+		return codeCache.list
+	}
+	list := []string{}
+	for _, m := range []struct {
+		name string
+		ex   protocol.Exchange
+	}{
+		{"sh", protocol.ExchangeSH},
+		{"sz", protocol.ExchangeSZ},
+		{"bj", protocol.ExchangeBJ},
+	} {
+		r, err := c.GetCodeAll(m.ex)
+		if err != nil {
+			// 单个市场失败不该让整个快照失败，另外两个市场照常返回
+			log.Printf("GetCodeAll(%s) 失败: %v", m.name, err)
+			continue
+		}
+		for _, it := range r.List {
+			// Instrument.Code 是纯 6 位（实测 sh 市场返回 "600000"，不带前缀），
+			// 所以市场用外层循环的 m.name 补，不能指望从 Code 里切
+			six := strings.ReplaceAll(strings.TrimSpace(it.Instrument.Code), ".", "")
+			if len(six) > 6 {
+				six = six[len(six)-6:]
+			}
+			if len(six) != 6 {
+				continue
+			}
+			if isAShare(m.name, six) {
+				list = append(list, m.name+six)
+			}
+		}
+	}
+	if len(list) > 0 {
+		codeCache.at = time.Now()
+		codeCache.list = list
+		log.Printf("A 股代码列表已刷新：%d 只", len(list))
+	}
+	return list
+}
+
+// exPrefix 协议市场编号 → 本项目用的市场前缀
+func exPrefix(e protocol.Exchange) string {
+	switch e {
+	case protocol.ExchangeSH:
+		return "sh"
+	case protocol.ExchangeSZ:
+		return "sz"
+	case protocol.ExchangeBJ:
+		return "bj"
+	}
+	return ""
 }
