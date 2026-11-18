@@ -897,18 +897,21 @@ app.get('/api/health', async (req, res) => {
       lastPrediction,
       // 通达信网关（10 §3.1）：板块指数日线的唯一来源，也是云端无本地库时的主力取数通道。
       // 这里只看缓存态，不主动探活——health 被前端轮询，每次探活会占住网关的串行队列。
-      tdx: (() => {
+      tdx: await (async () => {
         const c = (config.sources || {}).tdx || {};
         const a = require('./lib/sources/adapters/tdx');
+        // 探活有 60s 缓存，所以这里可以直接 await：首次访问探一次，
+        // 之后一分钟内都读缓存，不会把网关的串行队列打满。
+        // 不探的话新起的服务会一直显示 available=null，看的人不知道是「没探」还是「挂了」。
+        const up = await a.available();
         const det = a.probeDetail();
         return {
           enabled: c.enabled !== false,
           prefer: c.prefer !== false,
           baseUrl: a.base(),
-          // null = 还没探过（首次请求前）；true/false = 上次探活结果
-          available: det ? typeof det === 'object' : null,
-          server: det && typeof det === 'object' ? (det.server || null) : null,
-          error: typeof det === 'string' ? det : null,
+          available: up,
+          server: up && det && typeof det === 'object' ? (det.server || null) : null,
+          error: !up && typeof det === 'string' ? det : null,
         };
       })(),
       // 五道闸异步队列（05 §8）：running/queued 持续不降说明卡住了
