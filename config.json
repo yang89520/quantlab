@@ -157,6 +157,18 @@
     "cooldownMin": 20,
     "probeIntervalMin": 5,
     "sectorMemberPages": 5,
-    "sectorMemberPageSize": 100
+    "sectorMemberPageSize": 100,
+
+    "tdx": {
+      "enabled": true,
+      "baseUrl": "http://127.0.0.1:7710",
+      "timeoutMs": 20000,
+      "probeTtlMs": 60000,
+      "prefer": true,
+      "_note": "通达信网关（tdx-gateway，Go 写）。它提供本项目唯一拿得到的**板块指数日线**（880xxx），是「板块 K 线必须靠本地 38.5GB 库聚合」这个硬约束的唯一解法；同时补上个股 K 线、实时报价、个股统计（含资金流）与行业归属。",
+      "_note_prefer": "初始值 true。true 时网络层优先走 tdx，失败再退 ths/sina；本地库可用时仍优先本地（D2 本地优先不变）。何时改：网关不稳定、或想强制走老源对比口径。",
+      "_note_timeoutMs": "初始值 20000。板块包 /blocks 实测 16.6 秒、/stat 3.1 秒，所以这几个端点会单独放大到 60~90 秒；这个值是默认值。",
+      "_note_probeTtlMs": "初始值 60000。健康探测结果缓存一分钟——每次取数都探活会把网关的串行队列打满。"
+    }
   }
 }
