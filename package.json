@@ -10,7 +10,7 @@
     "start": "node server.js",
     "test": "node tools/smoke.js",
     "test:offline": "node tools/smoke.js --offline",
-    "test:unit": "node tests/unit/phase1.test.js && node tests/unit/phase2.test.js && node tests/unit/phase3.test.js && node tests/unit/cache.test.js && node tests/integration/reconcile.test.js && node tests/integration/phase2-direction.test.js && node tests/integration/datasource-rules.test.js && py/.venv/bin/python py/tdx_engine/selftest.py && node tests/integration/sector-index.test.js && node tests/integration/snapshot-backfill.test.js",
+    "test:unit": "node tests/unit/phase1.test.js && node tests/unit/phase2.test.js && node tests/unit/phase3.test.js && node tests/unit/cache.test.js && node tests/integration/reconcile.test.js && node tests/integration/phase2-direction.test.js && node tests/integration/datasource-rules.test.js && py/.venv/bin/python py/tdx_engine/selftest.py && node tests/integration/sector-index.test.js && node tests/integration/snapshot-backfill.test.js && node tests/integration/tdx-adapter.test.js",
     "daily": "node tools/daily-close.js",
     "report": "node tools/pred-report.js",
     "sector": "node tools/sector-report.js",
@@ -19,7 +19,11 @@
     "acceptance": "node tests/acceptance.js",
     "test:rules": "node tests/integration/datasource-rules.test.js",
     "gate": "node tools/gate-run.js",
-    "backfill": "node tools/daily-close.js --backfill"
+    "backfill": "node tools/daily-close.js --backfill",
+    "tdx:build": "cd tdx-gateway && go build -o bin/tdx-gateway .",
+    "tdx:start": "cd tdx-gateway && ./bin/tdx-gateway -port 7710",
+    "tdx:map": "node tools/tdx-map.js",
+    "tdx:probe": "node -e \"const t=require('./lib/sources/adapters/tdx');t.available(true).then(async ok=>{if(!ok){console.log('❌ 网关不可用：'+t.base());process.exit(1)}console.log('✅ 网关可用 '+t.base());const k=await t.kline('880301',{bars:5});console.log('   板块指数 880301: '+k.rows.length+' 根, asOf='+k.asOf);const q=await t.quote(['sh000001']);console.log('   报价: '+(q[0]?q[0].price:'—'));}).catch(e=>{console.log('❌ '+e.message);process.exit(1)})\""
   },
   "keywords": [],
   "author": "",

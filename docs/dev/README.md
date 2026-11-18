@@ -198,6 +198,11 @@ npm test             # 现有 26 项回归
 ├── tools/sector-report.js      二期  板块报告
 ├── tools/gate-run.js           三期  跑五道闸（CLI，同步版）
 ├── tools/install-schedule.sh   一期  装定时调度（launchd 优先，可打印 cron 行）
+├── tools/tdx-map.js            二期  生成「本板块 → 通达信板块指数」映射表
+├── tdx-gateway/                二期  通达信行情网关（Go，HTTP :7710）
+│   ├── main.go                 六个端点：/health /kline /quote /blocks /stat /hy
+│   ├── go.mod
+│   └── bin/                    编译产物，不入库
 ├── public/today.html           四期  今日一页
 ├── public/watch.html           四期  观察池
 ├── public/lab.html             四期  策略实验室

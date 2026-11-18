@@ -174,6 +174,7 @@ Node 22 的 `node:sqlite` 仍是实验特性（需 `--experimental-sqlite`），
 | 收盘任务 `daily-close.js` | 交易日 16:35 | 当天没预判卡 | cron 每天跑，幂等，可手工补跑 |
 | 板块段（二期） | **不独立调度**，串在 `daily-close.js` 内 | 板块数据缺 | 失败只影响 `mainline` 字段，不阻断预判卡生成 |
 | 策略闸（三期） | 手动触发 | 无影响 | 手动工具，不调度 |
+| 通达信网关 `tdx-gateway` | 常驻（:7710） | 板块指数、个股 K 线、报价退回 ths/sina | 只影响取数质量，不阻断服务；`/api/health` 里 `tdx.available` 可看 |
 | Python 子进程（三期） | 被 Node 调起 | 该次计算失败 | 超时 120s 强杀，错误透传 |
 
 **调度用系统 cron，不用常驻调度器。**

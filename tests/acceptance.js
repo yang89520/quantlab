@@ -388,18 +388,25 @@ function run(cmd, args, opts) {
     `exit=${gateCheck.status} len=${gateSrc.length}`);
 
   // C37：合成快照必须带 derived 标记（D4 留痕）。
+  const BF_DAY = '2026-11-12';   // 回补窗口内、且不与实时日重叠的一天
   // 回补出来的快照和当场抓的快照肉眼无法区分，不标出来后人分不清「当时抓的」
   // 和「事后算的」，而这直接决定这条对账数据能不能信。
   const todayResp = await get('/api/predict/today');
   const todayData = (todayResp.body && todayResp.body.data) || {};
-  const snapProv = (todayData.integrity && todayData.integrity.provenance
-    && todayData.integrity.provenance.snapshot) || {};
+  const provOf = (card) => ((card && card.integrity && card.integrity.provenance
+    && card.integrity.provenance.snapshot) || {});
+  const liveProv = provOf(todayData);
+  // 回补日的卡（11-12 是回补出来的）必须自证 derived=true；实时采集的卡必须 false。
+  // 只断言「最新一天」不够：最新一天通常是实时采集的，derived 本来就该是 false。
+  const bfResp = await get('/api/predict/' + BF_DAY);
+  const bfProv = provOf((bfResp.body && bfResp.body.data) || {});
   const dailyCloseSrc = read('tools/daily-close.js');
-  ok('C37', '合成快照带 derived 标记（回补日与实时日可区分）',
-    snapProv.derived === true
-    && Array.isArray(snapProv.nullFields) && snapProv.nullFields.length > 0
+  ok('C37', '合成快照带 derived 标记（回补日 true / 实时日 false，可区分）',
+    bfProv.derived === true
+    && Array.isArray(bfProv.nullFields) && bfProv.nullFields.length >= 2
+    && liveProv.derived === false
     && /derived: !!\(snapRec && snapRec\.synthesized\)/.test(dailyCloseSrc),
-    `derived=${snapProv.derived} nullFields=${JSON.stringify(snapProv.nullFields)}`);
+    `回补日 ${BF_DAY} derived=${bfProv.derived} nullFields=${JSON.stringify(bfProv.nullFields)}｜最新日 derived=${liveProv.derived}`);
 
   // C38：06 §4.4「必须画实盘 vs 回测两条线」。
   // 之前只有跟踪 tab 的两根静态进度条，看不出「最近在变好还是变差」。

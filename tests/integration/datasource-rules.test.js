@@ -89,10 +89,17 @@ function todayStr() {
   const ds = require(path.join(ROOT, 'lib', 'datasource'));
 
   const originalLocalDb = JSON.parse(JSON.stringify(config.localDb));
+  const originalTdx = JSON.parse(JSON.stringify(config.sources.tdx || {}));
 
   // 把解析器指向夹具库：这是「本地库只到 T-1」的真实形态，不是 mock
   config.localDb.enabled = true;
   config.localDb.marketDb = FIXTURE;
+
+  // 本文件要观察的是「本地库 → 传统网络源（ths/sina）」这条链的时序语义，
+  // 所以必须关掉通达信网关：它在这台机器上是活的，否则请求当日会先命中
+  // tdx（source=tdx/asOf=今日），把 D-4/D-5 的断言前提打乱。
+  // tdx 自身的优先级由 tests/integration/tdx-adapter.test.js 单独覆盖。
+  config.sources.tdx = Object.assign({}, config.sources.tdx, { enabled: false });
 
   // 网络层用替身：记录是否被调用 + 返回请求日的真实形状
   const calls = [];
@@ -208,6 +215,7 @@ function todayStr() {
   quote.klines = realKlines;
   quote.marketList = realMarketList;
   Object.assign(config.localDb, originalLocalDb);
+  Object.assign(config.sources.tdx, originalTdx);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {
     console.warn('  · 临时夹具清理失败：' + e.message);
   }

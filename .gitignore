@@ -40,3 +40,6 @@ logs/
 # 三期 Python 独立虚拟环境（可重建，不入库）
 py/.venv/
 data/cache/
+
+# 通达信网关二进制（go build 产物，云端按平台重新编译）
+tdx-gateway/bin/

@@ -155,7 +155,7 @@ const MUTATIONS = [
   },
   {
     name: 'D3 时效判定写反（T-1 当当日用）', file: 'lib/datasource.js', phase: '新增',
-    from: '    const canLocal = dbMax && (!target || target <= dbMax);',
+    from: '    const canLocal = !blockIdx && dbMax && (!target || target <= dbMax);',
     to: '    const canLocal = dbMax && (!target || target >= dbMax);',
     expectFail: ['integration/datasource-rules.test.js'],
     expectRed: ['D-4 请求今日'],
