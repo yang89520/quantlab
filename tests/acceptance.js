@@ -449,6 +449,22 @@ function run(cmd, args, opts) {
     && /window\.__qlErr/.test(todayJsSrc),
     `safeRender 调用 ${(todayJsSrc.match(/safeRender\('/g) || []).length} 处`);
 
+  // C41：注册表必须与实现一致（本轮发现过一次严重漂移）。
+  // 接入通达信后代码里三个资产的取数路径都变了，但 registry.js 一个字没改——
+  // 于是「看注册表判断数据来源」这件事变成假的：它还会告诉你个股 K 线来自
+  // local-db → ths → sina，实际早就先走 tdx 了。这种漂移不会让任何测试变红，
+  // 只会让后来的人按错误的前提排查问题。
+  const regSrc = read('lib/sources/registry.js');
+  const hasTdx = (asset) => {
+    const m = regSrc.match(new RegExp("'" + asset + "'\\s*:\\s*\\{[\\s\\S]{0,400}?sources:\\s*\\[([^\\]]*)\\]"));
+    return !!m && /tdx/.test(m[1]);
+  };
+  ok('C41', '注册表与实现一致（三个 tdx 主源资产已登记，死配置 zt-pool 已删）',
+    hasTdx('stock-kline') && hasTdx('market-snapshot') && hasTdx('sector-kline')
+    && !/'zt-pool'/.test(regSrc)
+    && /'tdx-kline'/.test(read('lib/sources/index.js')),
+    `stock-kline=${hasTdx('stock-kline')} snapshot=${hasTdx('market-snapshot')} sector-kline=${hasTdx('sector-kline')}`);
+
   const badDaily = run(process.execPath, ['tools/sector-report.js', '--date', 'not-a-date']);
   ok('D-4b', '失败任务非 0 退出', badDaily.status !== 0, `exit=${badDaily.status}`);
   const logFiles = filesIn('logs', '.log');
