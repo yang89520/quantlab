@@ -62,6 +62,7 @@ async function collectCandidates() {
 async function runOne(date, opt) {
   const o = opt || {};
   const fromLocal = !!o.fromLocal;
+  const fromTdx = !!o.fromTdx;
   const skipFetch = !!o.skipFetch;
   const skipSector = !!o.skipSector;
   const force = !!o.force;
@@ -80,7 +81,11 @@ async function runOne(date, opt) {
 
   // ---- 3. 快照 ----
   let snapRec = null;
-  if (fromLocal) {
+  if (fromTdx) {
+    // 回补：从通达信 K 线合成当日快照。比 --from-local 慢（5~6 分钟），
+    // 但不依赖本机市场库 —— 云端只能走这条。
+    snapRec = await snapLib.captureFromTdx(date);
+  } else if (fromLocal) {
     // 回补：从上游日线合成当日快照（不触网）。turnover/float_cap 上游没有，落 null。
     snapRec = await snapLib.captureFromLocal(date);
   } else if (!skipFetch) {
@@ -116,7 +121,8 @@ async function runOne(date, opt) {
       const sr = await sectordata.capture({
         date,
         reuse: !!o.reuse,
-        membersFrom: o.membersFrom || 'network',
+        // --from-tdx 是「本机没有市场库」的场景，成分不能从库里读（本来就是空的）
+        membersFrom: o.fromTdx ? 'network' : (o.membersFrom || 'network'),
       });
       strengthRows = sr.rows;
       log.info('daily-close.sector', {
@@ -364,15 +370,16 @@ async function main() {
 
   let dates;
   let fromLocal = has('from-local');
+  const fromTdx = has('from-tdx');
 
   if (backfillN) {
     if (!Number.isFinite(backfillN) || backfillN < 1) {
       throw new Error('--backfill 需要一个正整数，例如 --backfill 20');
     }
     dates = await recentTradingDays(Math.min(250, Math.floor(backfillN)));
-    // 回补一律走本地合成：历史日抓不到当时的实时快照，混用两种来源会让
-    // 命中率序列的口径不一致（同一指标只允许一套口径，G4）。
-    fromLocal = true;
+    // 回补一律走合成：历史日抓不到当时的实时快照，混用来源会让命中率序列
+    // 的口径不一致（G4）。默认用本地库（快）；显式加 --from-tdx 时走网关。
+    if (!fromTdx) fromLocal = true;
     log.info('daily-close.backfill', { days: dates.length, from: dates[0], to: dates[dates.length - 1] });
   } else if (overrideDate) {
     dates = [overrideDate];
@@ -384,8 +391,8 @@ async function main() {
 
   // 回补模式必须显式给日期：不给就会拿「今天」去合成，而今天上游库通常还没有日线，
   // 报错会很难懂。这里提前拦住，把用法说清楚。
-  if (fromLocal && !overrideDate && !backfillN) {
-    throw new Error('--from-local 必须配合 --date YYYY-MM-DD 或 --backfill N');
+  if ((fromLocal || fromTdx) && !overrideDate && !backfillN) {
+    throw new Error('--from-local / --from-tdx 必须配合 --date YYYY-MM-DD 或 --backfill N');
   }
 
   const st = await store.open();
@@ -393,6 +400,7 @@ async function main() {
 
   const opt = {
     fromLocal,
+    fromTdx,
     skipFetch: has('skip-fetch'),
     skipSector: has('skip-sector'),
     force: has('force'),

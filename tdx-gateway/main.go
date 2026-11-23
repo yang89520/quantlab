@@ -331,6 +331,95 @@ func main() {
 		}
 		var out []row
 		var codesN int
+		// date 为空 = 当日快照（走批量报价）；
+		// date=YYYY-MM-DD = 历史某日快照（走逐只 K 线，慢但能补）
+		//
+		// 历史日为什么不能复用批量报价：报价永远只给「此刻」。要还原 11-20 这种
+		// 已经过去的交易日，唯一数据源是 K 线，而通达信的 K 线接口是按只查询的。
+		// 5583 只 × 约 60ms ≈ 5~6 分钟，一次性回补可以接受。
+		histDate := strings.TrimSpace(r.URL.Query().Get("date"))
+		if histDate != "" {
+			if _, err := time.Parse("2006-01-02", histDate); err != nil {
+				writeJSON(w, 400, map[string]interface{}{"ok": false, "error": "date 格式应为 YYYY-MM-DD"})
+				return
+			}
+			// 分片：一次最多 800 只（约 48 秒）。整份 5583 只要 6 分钟，
+			// 而 Node 的 fetch 默认 bodyTimeout 是 300 秒 —— 不分片必然被
+			// 客户端断开，然后网关还在白算（实测踩过：进度跑到 4500 时客户端已超时）。
+			// 分片后每片都远低于 300 秒，且慢请求不会长时间占住网关的串行锁。
+			offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+			if offset < 0 {
+				offset = 0
+			}
+			limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+			if limit <= 0 || limit > 800 {
+				limit = 800
+			}
+			var total int
+			var end int
+			err := C.with(func(c tdx.Client) error {
+				codes := aShareCodes(c)
+				codesN = len(codes)
+				total = len(codes)
+				if offset > total {
+					offset = total
+				}
+				end = offset + limit
+				if end > total {
+					end = total
+				}
+				for i, code := range codes[offset:end] {
+					if i%200 == 0 {
+						log.Printf("历史快照 %s 分片 %d-%d 进度 %d/%d", histDate, offset, end, i, end-offset)
+					}
+					resp, err := c.GetKlineDay(code, 0, 60)
+					if err != nil {
+						continue
+					}
+					ks, e2 := resp.Klines()
+					if e2 != nil || len(ks) == 0 {
+						continue
+					}
+					// 从最后一根往前找「日期正好等于目标日」的那根。
+					// 找不到 = 当天停牌，跳过；绝不能拿更早的价冒充当日（D3）。
+					var hit *protocol.Kline
+					for j := len(ks) - 1; j >= 0; j-- {
+						d := ks[j].Time.Format("2006-01-02")
+						if d == histDate {
+							hit = ks[j]
+							break
+						}
+						if d < histDate {
+							break
+						}
+					}
+					if hit == nil {
+						continue
+					}
+					out = append(out, row{
+						Code: code, Price: hit.Close, PreClose: hit.Last,
+						Open: hit.Open, High: hit.High, Low: hit.Low,
+						Volume: hit.Volume, Amount: hit.Amount,
+					})
+				}
+				return nil
+			})
+			if err != nil {
+				fail(w, err)
+				return
+			}
+			if len(out) == 0 {
+				writeJSON(w, 503, map[string]interface{}{"ok": false, "error": histDate + " 没有任何个股 K 线（非交易日？）"})
+				return
+			}
+			ok(w, map[string]interface{}{
+				"list": out, "count": len(out), "aShareCodes": codesN,
+				"date": histDate, "source": "tdx", "ms": time.Since(t0).Milliseconds(),
+				"offset": offset, "limit": limit, "total": total,
+				"hasMore": end < total, "nextOffset": end,
+			})
+			return
+		}
 		err := C.with(func(c tdx.Client) error {
 			codes := aShareCodes(c)
 			codesN = len(codes)

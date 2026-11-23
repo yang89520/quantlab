@@ -175,6 +175,28 @@ function stubGateway(handler) {
     return true;
   });
 
+  await check('snapshot(date) 取历史日：URL 带 date，asOf 必须回传该日', async () => {
+    let seen = '';
+    stubGateway((url) => {
+      seen = url;
+      return {
+        body: {
+          ok: true, data: {
+            date: '2026-11-20', count: 1, aShareCodes: 1, ms: 300000,
+            list: [{ code: 'sh600000', price: 10.87, preClose: 10.70, open: 10.68, high: 10.95, low: 10.60, volume: 100, amount: 1080000000 }],
+          },
+        },
+      };
+    });
+    config.sources.tdx = Object.assign({}, originalCfg, { enabled: true, baseUrl: 'http://stub:7710' });
+    const s = await tdx.snapshot('2026-11-20');
+    assert.ok(/date=2026-11-20/.test(seen), 'URL 没带 date：' + seen);
+    assert.strictEqual(s.asOf, '2026-11-20', 'asOf 必须回传请求日，否则会被标成今天（D3）');
+    assert.strictEqual(s.source, 'tdx-history', '历史快照必须与当日快照区分开');
+    assert.strictEqual(s.data[0].chgPct, Number(((10.87 / 10.70 - 1) * 100).toFixed(4)));
+    return true;
+  });
+
   global.fetch = realFetch;
   config.sources.tdx = originalCfg;
 
