@@ -228,9 +228,17 @@ node tools/daily-close.js --backfill 20      # 最近 20 个交易日，按日�
 
 | 约束 | 做法 | 为什么 |
 |---|---|---|
-| 快照必须合成，不能抓实时 | `snapshot.captureFromLocal(date)` 从上游日线算 `chg_pct`/`amplitude` | 网络快照只有「此刻」。用 `capture(历史日)` 会把今天的行情标成历史日（D3），所以 `capture()` 现在对历史日**直接拒绝** |
+| 快照必须合成，不能抓实时 | `snapshot.captureFromLocal(date)` 从上游日线算；本机没有市场库时用 `captureFromTdx(date)` 走通达信 K 线 | 网络快照只有「此刻」。用 `capture(历史日)` 会把今天的行情标成历史日（D3），所以 `capture()` 现在对历史日**直接拒绝** |
 | 不许看到未来 | `readMemberKlines(codes, bars, until=date)`，指数 K 线 `resolve({date})` | 少传一个 `until`，板块榜和信号就会用上目标日之后的 K 线，回测结果漂亮但全是假的 |
 | 升序跑、同进程循环 | 单进程内按日循环，板块字典与成分股复用 | 成分股要打 221 次接口，20 天各起一个进程会被限流；实测已出现 `timeout`。改成字典读盘 + 成分读库，整轮 0 次网络请求 |
+
+两种合成方式的取舍：
+
+| 方式 | 参数 | 耗时 | 依赖 |
+|---|---|---|---|
+| 上游库合成 | `--from-local` | 约 15 秒/天 | 本机跑过 tdx-backtest 的每日更新，库里有该日 |
+| 通达信合成 | `--from-tdx` | 约 20~23 分钟/天（逐只 K 线，分片 500 只/片） | 只要有网关，**任何机器都能用**（云端唯一选择） |
+| 批量回补 | `--backfill N` | 约 75 秒/天 | 默认用本地库；加 `--from-tdx` 改走网关 |
 
 > 回补出来的快照在 `integrity.provenance.snapshot.derived` 上标 `true`，
 > 与当场抓的快照可区分（`turnover` / `float_cap` 为 `null`，见 `08` TD7）。
