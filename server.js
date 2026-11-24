@@ -12,6 +12,7 @@ const Q = require('./lib/quote');
 const store = require('./lib/store');
 const scan = require('./lib/scan');
 const shapeLib = require('./public/js/shape');
+const wyckoff = require('./lib/wyckoff');
 const config = require('./lib/config');
 const log = require('./lib/log');
 
@@ -43,10 +44,75 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, 'public'), {
+/* ---------------- 静态前端：给资源引用打内容指纹 ---------------- */
+// 手机浏览器（微信内置 / iOS WKWebView）对 Cache-Control: no-cache 的子资源仍可能
+// 直接复用旧副本 —— 表现就是「代码明明改了，页面上还是老样子」。这里在 HTML 出口处
+// 把 /js/x.js、/css/x.css 重写成带内容指纹的 URL：文件一变 URL 就变，缓存必然失效。
+// HTML 本身改为 no-store，避免页面骨架被缓存。
+const fs = require('fs');
+const crypto = require('crypto');
+
+const PUB = path.join(__dirname, 'public');
+const _verCache = new Map();
+
+function assetVer(urlPath) {
+  const hit = _verCache.get(urlPath);
+  const now = Date.now();
+  if (hit && now - hit.at < 5000) return hit.v;
+  let v = null;
+  try {
+    const st = fs.statSync(path.join(PUB, urlPath));
+    v = crypto.createHash('md5').update(`${st.size}:${st.mtimeMs}`).digest('hex').slice(0, 8);
+  } catch (e) { v = null; }
+  _verCache.set(urlPath, { v, at: now });
+  return v;
+}
+
+function sendHtml(req, res, file) {
+  fs.readFile(file, 'utf8', (err, html) => {
+    if (err) return res.status(404).type('text/plain').send('Not Found');
+    const out = html.replace(
+      /(<(?:script|link)\b[^>]*?\b(?:src|href)=")(\/[^"?#]+\.(?:js|css))(")/g,
+      (m, pre, url, post) => {
+        const v = assetVer(url.slice(1));
+        return v ? `${pre}${url}?v=${v}${post}` : m;
+      },
+    );
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    res.end(out);
+  });
+}
+
+/* 前端资金指标与回测共用 lib/flow-signal.js 这一份实现。
+ * 启动时同步到 public/js，避免出现「回测一套、页面另一套」的口径漂移。
+ * 只在源文件更新时覆盖，不会每次重启都改动 mtime 拖累缓存。 */
+try {
+  const _src = path.join(__dirname, 'lib', 'flow-signal.js');
+  const _dst = path.join(PUB, 'js', 'flow-signal.js');
+  const _s = fs.statSync(_src);
+  const _d = fs.existsSync(_dst) ? fs.statSync(_dst) : null;
+  if (!_d || _s.mtimeMs > _d.mtimeMs) fs.copyFileSync(_src, _dst);
+} catch (e) {
+  log.warn('flow.sync_failed', { error: e.message });
+}
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (req.path === '/') return sendHtml(req, res, path.join(PUB, 'index.html'));
+  if (!/\.html$/.test(req.path)) return next();
+  const file = path.join(PUB, req.path);
+  if (!file.startsWith(PUB + path.sep)) return next();   // 挡住 ../ 越界
+  return sendHtml(req, res, file);
+});
+
+app.use(express.static(PUB, {
   maxAge: 0,
   setHeaders(res, p) {
-    if (/\.(js|css)$/.test(p)) res.setHeader('Cache-Control', 'no-cache');
+    if (!/\.(js|css)$/.test(p)) return;
+    // 带了指纹的请求可以长期缓存，没带的（直接访问 /js/app.js）仍每次校验
+    const hasVer = !!(res.req && res.req.query && res.req.query.v);
+    res.setHeader('Cache-Control', hasVer ? 'public, max-age=31536000, immutable' : 'no-cache');
   },
 }));
 
@@ -70,16 +136,40 @@ function fail(res, e) {
 /* ---------------- 行情 ---------------- */
 
 // 单只标的：K 线 + 快照（个股与指数同一接口，用 asset 区分）
+/* 威科夫结构识别：只输出客观特征与规则化形态，不含买卖建议（见 lib/wyckoff.js 的边界说明） */
+app.get('/api/wyckoff/:code', async (req, res) => {
+  try {
+    const it = Q.normalize(req.params.code);
+    if (!it) return res.status(400).json({ ok: false, error: '代码格式不正确' });
+    const period = ['day', 'week', 'month'].includes(req.query.period) ? req.query.period : 'day';
+    const bars = Math.min(5000, Math.max(80, parseInt(req.query.bars, 10) || 250));
+    const k = await Q.klines(it.key, bars, period);
+    ok(res, wyckoff.analyze(k.rows, { code: it.code, name: k.name, period }));
+  } catch (e) { fail(res, e); }
+});
+
+// 卡尔曼市场状态：只回答「现在该承担多少风险」，不回答「买哪只」。
+// 个股层面的卡尔曼趋势在 A 股是负 alpha（已回测证否），别把这个当买卖信号用。
+app.get('/api/kalman/market', async (req, res) => {
+  try {
+    const d = await kalmanMarket.getMarketState({ force: req.query.force === '1' });
+    if (!d.ok) return res.status(503).json({ ok: false, error: d.error, detail: d.detail });
+    ok(res, d);
+  } catch (e) { fail(res, e); }
+});
+
 app.get('/api/stock/:code', async (req, res) => {
   try {
     const it = Q.normalize(req.params.code);
     if (!it) return res.status(400).json({ ok: false, error: '代码格式不正确' });
     const isIndex = it.asset === 'index';
-    // 「全部」按标的类型给到各自可得的历史长度：指数 5000 根（约 20 年），个股 1500 根
+    // 「全部」按标的类型给到各自可得的历史长度：指数 5000 根（约 20 年），个股 3000 根。
+    // 个股实际拿不满 3000 —— 同花顺年份文件只回溯约 10 年（2512 根左右），
+    // 这里给到 3000 是为了让上游决定上限，而不是我们自己先砍一刀。
     const isAll = req.query.all === '1';
     const bars = isAll
-      ? (isIndex ? 5000 : 1500)
-      : Math.min(1500, Math.max(80, parseInt(req.query.bars, 10) || 500));
+      ? (isIndex ? 5000 : 3000)
+      : Math.min(3000, Math.max(80, parseInt(req.query.bars, 10) || 500));
     // 基准：个股比上证；指数比沪深300（看沪深300本身时退回上证），
     // 这样「创业板指 vs 沪深300」这类相对强弱才有意义。
     const benchCode = isIndex ? (it.code === '000300' ? 'sh000001' : 'sh000300') : 'sh000001';
@@ -90,8 +180,9 @@ app.get('/api/stock/:code', async (req, res) => {
       // 必须用 it.key（指数带市场前缀）：裸 6 位会在 normalize 里被当成深市个股
       Q.klines(it.key, bars),
       Q.snapshots([it.key]).catch(() => ({})),
-      // 周线：多周期共振与周线 KD 用，取 5 年
-      Q.klines(it.key, 260, 'week').catch(() => null),
+      // 周线：多周期共振与周线 KD 用。日线已经有 10 年，周线跟着给满，
+      // 否则切到周线视图点「全部」只能看到 5 年，和日线对不上。
+      Q.klines(it.key, 520, 'week').catch(() => null),
       // 基准：多取一些，保证周/月线也能完整对齐
       Q.klines(benchCode, 1500).catch(() => null),
     ]);
@@ -279,7 +370,7 @@ app.post('/api/screen/klines', async (req, res) => {
       .filter((c) => /^(sh|sz|bj)?\d{6}$/.test(c))
       .slice(0, 300);
     if (!codes.length) return res.status(400).json({ ok: false, error: '缺少 codes' });
-    const bars = Math.min(1500, Math.max(120, parseInt(body.bars, 10) || 1200));
+    const bars = Math.min(3000, Math.max(120, parseInt(body.bars, 10) || 1200));
 
     // 基准只取一次，所有标的共用（相对强弱 / 大盘环境判断）
     const bench = await Q.klines('sh000001', 1500).catch(() => null);
@@ -297,7 +388,7 @@ app.post('/api/screen/klines', async (req, res) => {
           const month = await Q.klines(code, 130, 'month');
           const [k, week, snaps] = await Promise.all([
             Q.klines(code, bars),
-            Q.klines(code, 260, 'week').catch(() => null),
+            Q.klines(code, 520, 'week').catch(() => null),
             Q.snapshots([code]).catch(() => ({})),
           ]);
           const snap = snaps[Q.normalize(code).key] || null;
@@ -522,19 +613,45 @@ async function resolveSectorDate(q) {
 }
 
 /** 板块强度榜：行业/概念分两张榜返回，绝不混排 */
+/**
+ * 把字典里的资金流挂到强度行上。
+ *
+ * 为什么不在强度计算里做：强度依赖上游行情库（localDb.marketDb），
+ * 缺库时整表降级、netInflowPctile 全为 null，但资金流本身已经取到了，
+ * 不该跟着一起消失。这里按板块代码合并，与强度计算解耦。
+ */
+function attachInflow(rows) {
+  const flow = sectordata.inflowMap();
+  if (!flow.size) return rows;
+  return rows.map((r) => {
+    const f = flow.get(r.sector);
+    if (!f) return r;
+    return Object.assign({}, r, {
+      netInflow: f.netInflow,
+      netRatio: f.netRatio,
+      leadName: f.leadName,
+      leadChgPct: f.leadChgPct,
+      // 同时塞进 metrics：详情页的指标表统一读 metrics，不必为资金流开特例
+      metrics: Object.assign({}, r.metrics, { netInflow: f.netInflow, netRatio: f.netRatio }),
+    });
+  });
+}
+
 app.get('/api/sector/strength', async (req, res) => {
   try {
     const { date, stale, askedFor } = await resolveSectorDate(req.query.date);
     const t = req.query.type;
     const type = (t === 'industry' || t === 'concept') ? t : null;
     const rows = await sectordata.readStrength(date, type, { readOnly: true });
+    const withFlow = attachInflow(rows);
     ok(res, {
-      date, type: type || 'all', total: rows.length, footnote: FOOTNOTE,
+      date, type: type || 'all', total: withFlow.length, footnote: FOOTNOTE,
       // stale=true 表示「今天还没跑，给的是库内最新一天」；前端据此标「非当日」
       stale, askedFor,
-      industry: rows.filter((r) => r.type === 'industry'),
-      concept: rows.filter((r) => r.type === 'concept'),
-      degradedCount: rows.filter((r) => r.degraded).length,
+      inflowCount: withFlow.filter((r) => r.netInflow != null).length,
+      industry: withFlow.filter((r) => r.type === 'industry'),
+      concept: withFlow.filter((r) => r.type === 'concept'),
+      degradedCount: withFlow.filter((r) => r.degraded).length,
     });
   } catch (e) { fail(res, e); }
 });
@@ -552,7 +669,7 @@ app.get('/api/sector/history', async (req, res) => {
 app.get('/api/sector/:code', async (req, res) => {
   try {
     const { date, stale, askedFor } = await resolveSectorDate(req.query.date);
-    const rows = await sectordata.readStrength(date, null, { readOnly: true });
+    const rows = attachInflow(await sectordata.readStrength(date, null, { readOnly: true }));
     const one = rows.find((r) => r.sector === req.params.code);
     if (!one) return ok(res, null);
     const st = await storeDao.open({ readOnly: true });
@@ -709,6 +826,8 @@ const strategies = require('./lib/strategy');
 const track = require('./lib/track');
 const py = require('./lib/pyrunner');
 const gatesLib = require('./lib/gates');
+const formulaScreen = require('./lib/formula-screen');
+const kalmanMarket = require('./lib/kalman-market');
 
 /** 解析公式输出线（必须手选，不自动猜） */
 app.post('/api/lab/formula/lines', async (req, res) => {
@@ -750,9 +869,70 @@ app.get('/api/lab/gates/:taskId', async (req, res) => {
   } catch (e) { fail(res, e); }
 });
 
-/** 策略列表（附该版本最近一次五道闸结论） */
-app.get('/api/lab/strategies', async (req, res) => {
+/** 公式选股：全市场批量跑一条公式（月线/周线），返回本次命中 + 拥挤度判读。
+ *  这是长任务（首次全市场要十几分钟，之后走当日缓存），所以同样走 taskId + 轮询。
+ *  同时只允许一个在跑：两个并发任务会把上游取数打到限流，谁都跑不完。 */
+let screenRunning = false;
+
+app.post('/api/lab/screen', async (req, res) => {
   try {
+    const b = req.body || {};
+    if (!String(b.formula || '').trim()) return res.status(400).json({ ok: false, error: 'formula 必填' });
+    if (!String(b.outputLine || '').trim()) return res.status(400).json({ ok: false, error: 'outputLine 必填' });
+    if (screenRunning) return res.status(429).json({ ok: false, error: '已有选股任务在跑，请等它结束' });
+
+    const task = await lab.createTask('screen', {
+      formula: b.formula, outputLine: b.outputLine,
+      period: b.period || 'month', board: b.board || null, limit: b.limit, months: b.months,
+    });
+    screenRunning = true;
+    const taskId = task.id;
+
+    // 立即返回；后台跑。进度按 5% 节流写盘，避免每 20 只就重写一遍任务文件。
+    setImmediate(async () => {
+      let lastPct = -10;
+      try {
+        await lab.updateTask(taskId, { status: 'running', progress: 1 });
+        const r = await formulaScreen.screen(Object.assign({}, b, {
+          onProgress: (pct, total, hits, msg) => {
+            if (pct - lastPct < 3 && pct < 100) return;
+            lastPct = pct;
+            lab.updateTask(taskId, { progress: Math.max(1, Math.min(99, pct)), note: msg || '' })
+              .catch((e) => log.warn('lab.screen_progress_failed', { taskId, progress: pct, error: e.message }));
+          },
+        }));
+        await lab.updateTask(taskId, { status: 'done', progress: 100, result: r, note: '' });
+        log.info('lab.screen_done', {
+          taskId, scanned: r.scanned, hits: r.hitCount,
+          latest: `${r.latestMonth}:${r.latestCount}`, elapsedMs: r.elapsedMs,
+        });
+      } catch (e) {
+        await lab.updateTask(taskId, { status: 'failed', error: e.message, note: '' })
+          .catch((e2) => log.error('lab.screen_fail_update', { taskId, error: e2.message }));
+        log.error('lab.screen_failed', { taskId, error: e.message, kind: e.kind || null });
+      } finally {
+        screenRunning = false;
+      }
+    });
+
+    ok(res, { taskId, status: 'pending' });
+  } catch (e) { fail(res, e); }
+});
+
+/** 选股任务轮询 */
+app.get('/api/lab/screen/:taskId', async (req, res) => {
+  try {
+    const t = lab.getTask(req.params.taskId);
+    if (!t) return res.status(404).json({ ok: false, error: '任务不存在' });
+    ok(res, {
+      taskId: t.id, status: t.status, progress: t.progress, note: t.note || '',
+      result: t.result, error: t.error, createdAt: t.createdAt,
+    });
+  } catch (e) { fail(res, e); }
+});
+
+/** 策略列表（附该版本最近一次五道闸结论） */
+app.get('/api/lab/strategies', async (req, res) => {  try {
     const st = await storeDao.open({ readOnly: true });
     const gr = await st.query('strategy_gate', { order: 'date', desc: true, limit: 1000 });
     const byKey = new Map();

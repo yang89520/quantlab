@@ -126,6 +126,7 @@
       <div class="chart-wrap">
         <canvas id="chart"></canvas>
         <div class="tip" id="tip"></div>
+        <button class="btn-latest" id="btnLatest" hidden>最新 ›</button>
       </div>
       <div class="chart-bar">
         <div class="grp">
@@ -138,18 +139,30 @@
           <span>根数</span>
           <button class="btn on" data-bars="90">90</button>
           <button class="btn" data-bars="250">250</button>
-          <button class="btn" data-bars="1200">全部</button>
+          <button class="btn" data-bars="500">500</button>
+          <!-- 2500 是「全部」的哨兵值：个股上游上限约 2512 根，给 2500 就等同于全量 -->
+          <button class="btn" data-bars="2500">全部</button>
         </div>
         <div class="grp" style="margin-left:18px">
-          <button class="btn on" id="btnAuto" title="副图跟随当前流派自动切换">副图跟随流派</button>
+          <button class="btn on" id="btnAuto" title="副图跟随当前流派自动切换"><span class="lbl-full">副图跟随流派</span><span class="lbl-short">副图</span></button>
           <button class="btn" id="btnPool" title="用当前综合评分加入观察池（需板块 A/B 档）">★ 加入观察池</button>
         </div>
-        <div class="sp" id="chartHint">滚轮缩放 · 拖拽平移 · 悬停查看 · ← → 切换流派</div>
+        <div class="sp" id="chartHint">
+          <span class="hint-desk">滚轮缩放 · 拖拽平移 · 悬停查看 · ← → 切换流派</span>
+          <span class="hint-touch">双指缩放 · 单指平移 · 长按出光标 · 双击收起</span>
+        </div>
       </div>
     </div>
 
     <div class="card">
       <div class="insight" id="insight"></div>
+    </div>
+
+    <div class="card chart-card">
+      <div class="card-hd"><span class="dot"></span><h2>市场状态 · 卡尔曼</h2></div>
+      <div class="card-bd" id="kalmanMarket">
+        <div style="font-size:12px;color:var(--muted)">加载中…</div>
+      </div>
     </div>
 
     <div class="card chart-card">
@@ -256,7 +269,12 @@ PUT    /api/groups/order              <span class="c">// { ids: [] } 排序</spa
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
 
 <script src="/js/indicators.js"></script>
+<script src="/js/flow-signal.js"></script>
+<script src="/js/kalman.js"></script>
+<script src="/js/market-panel.js"></script>
 <script src="/js/engine.js"></script>
+<!-- 威科夫 v2 的结构计算在 shape.js（与选股页共用同一份实现），必须先于 strategies.js 加载 -->
+<script src="/js/shape.js"></script>
 <script src="/js/strategies.js"></script>
 <script src="/js/app.js"></script>
 <script src="/js/watchlist.js"></script>

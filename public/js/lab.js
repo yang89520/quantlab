@@ -215,8 +215,8 @@
   }
 
   /* ================= Tab 切换 ================= */
-  const TABS = ['t-edit', 't-gate', 't-sig', 't-track', 't-batch'];
-  const PANELS = ['p-edit', 'p-gate', 'p-sig', 'p-track', 'p-batch'];
+  const TABS = ['t-edit', 't-gate', 't-sig', 't-track', 't-batch', 't-pick'];
+  const PANELS = ['p-edit', 'p-gate', 'p-sig', 'p-track', 'p-batch', 'p-pick'];
   const PANEL_LOADERS = { 1: loadGatePanel, 2: loadSignalPanel, 3: loadTrackPanel, 4: loadBatchPanel };
 
   function selectTab(i, focus) {
@@ -1131,6 +1131,251 @@
     });
   }
 
+  /* ================= 选股（全市场跑公式） ================= */
+  /**
+   * 预置公式：用户给的「月线三重底」。放在这里而不是后端，是因为它是「默认值」而不是
+   * 「系统内置逻辑」——用户可以随便改，改完提交的就是它自己。
+   */
+  var PICK_FORMULA = [
+    '{月线三重底：超跌红柱 + 买点 + 地量，三者同时成立}',
+    '周期:=60; 偏离阈:=10; 箱位阈:=20;',
+    '均60:=MA(C,周期);',
+    '偏离:=(C/均60-1)*100;',
+    '中位:=(2*C+H+L)/4;',
+    '低34:=LLV(L,34);',
+    '高34:=HHV(H,34);',
+    '箱位:=(中位-低34)/(高34-低34)*100;',
+    '超跌红柱:=箱位<20 AND 偏离<-10;',
+    '原始买:=偏离<-偏离阈 AND 箱位<箱位阈;',
+    '买:=FILTER(原始买,20);',
+    '量位:=(V-LLV(V,30))/(HHV(V,30)-LLV(V,30)+0.0001)*100;',
+    '地量:=量位<20;',
+    'XG:超跌红柱 AND 买 AND 地量;',
+  ].join('\n');
+
+  var pickState = { taskId: null, timer: null, result: null, month: null, expand: false };
+  var PICK_PAGE = 60;   // 明细一次最多渲染 60 行，288 行全铺开手机要滚很久
+
+  function pickCrowdCls(level) {
+    return { none: 'chip-c', single: 'chip-warn', sparse: 'chip-bad', broad: 'chip-c', market: 'chip-ok' }[level] || 'chip-c';
+  }
+
+  function renderCrowd(d) {
+    var box = $('pick-crowd');
+    var chip = $('pick-crowd-chip');
+    if (!d || !d.crowding) {
+      box.textContent = '';
+      chip.className = 'chip chip-c';
+      chip.textContent = '未扫描';
+      return;
+    }
+    var c = d.crowding;
+    chip.className = 'chip ' + pickCrowdCls(c.level);
+    chip.textContent = c.label;
+
+    // 静态兜底文案写的是三重底的历史成绩，换公式时必须改掉，
+    // 否则 +22.9% 会被当成当前公式的收益（这是最容易误导人的一处）。
+    var statNote = $('pick-stat-note');
+    if (statNote) {
+      statNote.textContent = d.crowdBaseline
+        ? '历史基准（715 只 / 598 个信号，2020-11~2026-10，月线 12 个月持有）：均值 +22.9%、中位 +16.3%、胜率 72.9%；同期全市场 +11.9%。'
+        : '当前公式没有同口径的历史样本（上表那套基准只属于月线三重底）。'
+          + '要看它能不能用，请在「验证」页用同一份数据做回测，别借用别的公式的成绩。';
+    }
+    box.textContent = '';
+
+    var big = el('div', 'pick-big');
+    big.appendChild(el('b', 'num', String(d.latestCount)));
+    big.appendChild(el('span', 'pick-big-sub', ' 只 · ' + d.latestMonth));
+    box.appendChild(big);
+
+    box.appendChild(el('p', 'pick-desc', c.desc));
+
+    if (c.hist) {
+      box.appendChild(el('p', 'lab-sub',
+        '同档历史（月线三重底公式）：均值 ' + c.hist.mean.toFixed(1) + '% · 中位 ' + c.hist.med.toFixed(1)
+        + '% · 胜率 ' + c.hist.win.toFixed(1) + '% · 样本 ' + c.hist.n + ' 个'));
+    }
+    if (d.pool) {
+      box.appendChild(el('p', 'lab-sub',
+        '本次扫描 ' + d.scanned + ' 只（池 ' + d.pool.total + '），命中占 '
+        + (c.share ? c.share.toFixed(1) : '0.0') + '%；耗时 '
+        + (d.elapsedMs / 1000).toFixed(0) + ' 秒，缓存复用 ' + (d.cache ? d.cache.reused : 0) + ' 只'));
+      if (d.scanned < 800) {
+        box.appendChild(el('p', 'lab-sub pick-warn',
+          '扫描池只有 ' + d.scanned + ' 只，命中率会被池子结构带偏（池子偏大盘时超跌股更少），'
+          + '判读建议以 1200 只以上为准。'));
+      }
+    }
+  }
+
+  function renderHits(d) {
+    var wrapM = $('pick-months-wrap');
+    var wrapH = $('pick-hits-wrap');
+    var empty = $('pick-empty');
+    var tbM = $('pick-months-tbody');
+    var tbH = $('pick-hits-tbody');
+    tbM.textContent = '';
+    tbH.textContent = '';
+
+    var months = Object.keys(d.byMonth || {}).sort().reverse();
+    if (!months.length) {
+      wrapM.hidden = true;
+      wrapH.hidden = true;
+      empty.hidden = false;
+      $('pick-result').hidden = false;
+      return;
+    }
+    empty.hidden = true;
+    wrapM.hidden = false;
+    wrapH.hidden = false;
+    $('pick-result').hidden = false;
+
+    months.forEach(function (m) {
+      var n = d.byMonth[m];
+      var share = d.pool && d.pool.total ? (n / d.pool.total) * 100 : 0;
+      var tr = el('tr');
+      var td0 = el('td');
+      var btn = el('button', 'btn btn-sm btn-ghost', m);
+      btn.type = 'button';
+      btn.addEventListener('click', function () {
+        pickState.month = (pickState.month === m) ? null : m;
+        renderHits(pickState.result);
+      });
+      if (pickState.month === m) btn.classList.add('is-on');
+      td0.appendChild(btn);
+      tr.appendChild(td0);
+      tr.appendChild(el('td', 'r num', String(n)));
+      var lv = n >= 30 ? '市场级' : (n >= 10 ? '扩散' : (n >= 3 ? '零散' : '个股级'));
+      var cls = n >= 30 ? 'chip-ok' : (n >= 3 ? 'chip-warn' : 'chip-c');
+      var td2 = el('td');
+      td2.appendChild(el('span', 'chip ' + cls, lv));
+      if (share >= 0.5) td2.appendChild(el('span', 'lab-sub', ' 占池 ' + share.toFixed(1) + '%'));
+      tr.appendChild(td2);
+      tbM.appendChild(tr);
+    });
+
+    var list = (d.hits || []).filter(function (h) {
+      return !pickState.month || String(h.date).slice(0, 7) === pickState.month;
+    });
+    var more = $('pick-more');
+    var moreBtn = $('pick-more-btn');
+    if (!list.length) {
+      more.hidden = true;
+      var tr0 = el('tr');
+      var td = el('td', '', '该月份没有可显示的明细');
+      td.colSpan = 8;
+      tr0.appendChild(td);
+      tbH.appendChild(tr0);
+      return;
+    }
+    var shown = pickState.expand ? list : list.slice(0, PICK_PAGE);
+    if (list.length > shown.length) {
+      more.hidden = false;
+      moreBtn.textContent = '展开全部 ' + list.length + ' 条（当前显示前 ' + shown.length + ' 条）';
+      moreBtn.onclick = function () { pickState.expand = true; renderHits(pickState.result); };
+    } else if (list.length > PICK_PAGE) {
+      more.hidden = false;
+      moreBtn.textContent = '收起，只看前 ' + PICK_PAGE + ' 条';
+      moreBtn.onclick = function () { pickState.expand = false; renderHits(pickState.result); };
+    } else {
+      more.hidden = true;
+    }
+
+    shown.forEach(function (h) {
+      var tr = el('tr');
+      var a = el('a', 'pick-code', h.sym);
+      a.href = '/#' + String(h.sym).replace(/^(sh|sz|bj)/, '');
+      tr.appendChild(el('td')).appendChild(a);
+      tr.appendChild(el('td', '', h.name || '—'));
+      tr.appendChild(el('td', '', String(h.date).slice(0, 7)));
+      tr.appendChild(el('td', 'r num', isNum(h.dev) ? h.dev.toFixed(1) + '%' : '—'));
+      tr.appendChild(el('td', 'r num', isNum(h.box) ? h.box.toFixed(1) : '—'));
+      tr.appendChild(el('td', 'r num', isNum(h.vpos) ? h.vpos.toFixed(1) : '—'));
+      tr.appendChild(el('td', 'r num', isNum(h.close) ? Number(h.close).toFixed(2) : '—'));
+      tr.appendChild(el('td', 'r num', isNum(h.barsAgo) ? h.barsAgo + ' 月' : '当月'));
+      tbH.appendChild(tr);
+    });
+  }
+
+  function pickProgress(pct, text) {
+    var box = $('pick-progress');
+    box.hidden = false;
+    $('pick-progress-text').textContent = text || '执行中…';
+    $('pick-progress-pct').textContent = pct + '%';
+    $('pick-progress-fill').style.width = pct + '%';
+  }
+
+  async function pollPick(taskId) {
+    var d = await api('/api/lab/screen/' + encodeURIComponent(taskId));
+    pickProgress(d.progress || 0, d.note || (d.status === 'running' ? '执行中…' : '排队中…'));
+    if (d.status === 'done') {
+      pickState.result = d.result;
+      pickState.month = null;
+      renderCrowd(d.result);
+      renderHits(d.result);
+      pickProgress(100, '完成');
+      $('pick-note').textContent = '扫描完成：命中 ' + d.result.hitCount + ' 个（窗口 '
+        + d.result.months + ' 个月）';
+      $('pick-run').disabled = false;
+      clearInterval(pickState.timer);
+      pickState.timer = null;
+      return;
+    }
+    if (d.status === 'failed') {
+      $('pick-note').textContent = '扫描失败：' + (d.error || '未知错误');
+      $('pick-run').disabled = false;
+      clearInterval(pickState.timer);
+      pickState.timer = null;
+    }
+  }
+
+  async function runPick() {
+    var formula = $('pick-formula').value.trim();
+    var line = $('pick-line').value.trim();
+    if (!formula) return showError('公式不能为空', runPick);
+    if (!line) return showError('输出线不能为空', runPick);
+    $('pick-run').disabled = true;
+    $('pick-note').textContent = '已提交，正在取数…';
+    $('pick-result').hidden = true;
+    $('pick-progress').hidden = false;
+    pickProgress(1, '已提交…');
+    try {
+      var r = await api('/api/lab/screen', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          formula: formula,
+          outputLine: line,
+          period: $('pick-period').value,
+          board: $('pick-board') ? ($('pick-board').value || null) : null,
+          limit: Number($('pick-limit').value) || 1200,
+          months: Number($('pick-months').value) || 12,
+        }),
+      });
+      pickState.taskId = r.taskId;
+      clearInterval(pickState.timer);
+      pickState.timer = setInterval(function () {
+        pollPick(r.taskId).catch(function (e) {
+          clearInterval(pickState.timer);
+          pickState.timer = null;
+          $('pick-run').disabled = false;
+          showError(e.message, runPick);
+        });
+      }, 2500);
+      pollPick(r.taskId).catch(function (e) { console.warn('pick.poll', e && e.message); });
+    } catch (e) {
+      $('pick-run').disabled = false;
+      showError(e.message, runPick);
+    }
+  }
+
+  function wirePick() {
+    var ta = $('pick-formula');
+    if (ta && !ta.value) ta.value = PICK_FORMULA;
+    $('pick-run').addEventListener('click', function () { runPick(); });
+  }
+
   /* ================= 启动 ================= */
   function boot() {
     $('global-error-retry').addEventListener('click', function () {
@@ -1145,6 +1390,7 @@
     wireSignals();
     wireTrack();
     wireBatch();
+    wirePick();
     wireDrawer();
     $('gate-detail-btn').addEventListener('click', function () {
       var r = state.gateResult || {};

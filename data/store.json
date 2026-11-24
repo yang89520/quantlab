@@ -84,6 +84,24 @@
       "groupId": "g_core",
       "order": 3,
       "addedAt": 1794305638327
+    },
+    {
+      "code": "601599",
+      "name": "浙文影业",
+      "market": "sh",
+      "asset": "stock",
+      "groupId": "g_core",
+      "order": 4,
+      "addedAt": 1795169776485
+    },
+    {
+      "code": "603324",
+      "name": "盛剑科技",
+      "market": "sh",
+      "asset": "stock",
+      "groupId": "g_core",
+      "order": 5,
+      "addedAt": 1795169798467
     }
   ]
 }

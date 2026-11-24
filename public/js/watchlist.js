@@ -49,8 +49,8 @@
     groups: [],
     currentCode: null,
     currentName: '',
-    bars: 1200,
-    range: 90,
+    bars: 2500,   // 个股约 10 年（源上限 2512 根），「全部」按钮才能真的给到全部
+    range: 0,    // 0 = 尚未决定，由 openStock 按屏幕给默认值（手机 60 / 桌面 140）
     strategy: null,
     collapsed: new Set(JSON.parse(localStorage.getItem('ql.collapsed') || '[]')),
     // 搜索添加的目标分组：显式记住用户最后点过的分组，
@@ -342,8 +342,8 @@
       S.klinesAt = Date.now();
 
       // 重挂载图表引擎
-      const prevRange = keepView ? S.range : null;
-      if (!keepView) S.range = 90;
+      const prevRange = keepView ? S.range : 0;
+      if (!keepView) S.range = 0;
       window.QLMount(d.klines, {
         name: S.currentName,
         display: d.display,
@@ -357,9 +357,15 @@
         benchName: d.benchName,
       });
       renderQuality(d.quality, d.source);
-      if (prevRange) {
-        const app = window.QuantLab.app;
-        if (app) { app.chart.setRange(prevRange); app.select(app.currentId); }
+      // 视图根数：切股时沿用上一次的根数；首次进页面按屏幕给默认值
+      // （手机 60 根、桌面 140 根，与 app.js 的 defaultBars 保持一致）
+      const app0 = window.QuantLab.app;
+      if (app0 && app0.chart) {
+        // 60 根只给窄屏；横屏宽度够，140 根一根 5~6px 反而更适合看波段
+        const want = Math.min(prevRange || (window.innerWidth < 760 ? 60 : 140), d.klines.length);
+        S.range = want;
+        app0.chart.setRange(want);
+        if (prevRange) app0.select(app0.currentId);
       }
       syncHash();
       renderTree();
@@ -570,7 +576,7 @@
         const inp = sh.querySelector('.sh-in');
         if (!inp) return;
         inp.focus();
-        try { inp.select(); } catch (err) { console.warn('[watchlist] 可选能力不可用', err); }
+        try { inp.select(); } catch (err) { console.warn('[watchlist] 选中文本不可用', err); }
         if (inp.scrollIntoView) inp.scrollIntoView({ block: 'center' });
       }, 80);
     }
@@ -797,7 +803,8 @@
   const sidebarEl = $('sidebar');
   const foldBtn = $('sbFold');
   const FOLD_KEY = 'ql.sbfold';
-  const isPhone = () => window.matchMedia('(max-width:760px)').matches;
+  // 横屏（844×390）宽度过了 760，但可用高度只有 390，同样要按手机布局处理
+  const isPhone = () => window.matchMedia('(max-width:760px),(max-height:540px)').matches;
 
   function setFold(folded, persist) {
     const on = !!folded && isPhone();
@@ -876,7 +883,7 @@
         if (grp) openGroupSheet(grp.dataset.gid);
       }
       lpStart = null;
-      try { if (navigator.vibrate) navigator.vibrate(14); } catch (err) { console.warn('[watchlist] 可选能力不可用', err); }
+      try { if (navigator.vibrate) navigator.vibrate(14); } catch (err) { console.warn('[watchlist] 振动不可用', err); }
     }, 480);
   }, { passive: true });
 

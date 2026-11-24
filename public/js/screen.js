@@ -16,6 +16,12 @@
   const $$ = (s) => Array.prototype.slice.call(document.querySelectorAll(s));
 
   const SHAPE = window.QLShape;
+  /** 威科夫 v2 阶段 → 列表徽章短名（与 shape.js 的 WY_PHASE 一一对应） */
+  const WY_TAG = {
+    accumB: '吸B', accumC0: '吸C0', accumC: '吸C', accumD0: '吸D0', accumD: '吸D',
+    markup: 'E段', distrib: '派发', markdown: '下跌', weak: '走弱',
+    range: '中性', transition: '过渡',
+  };
   const S = {
     all: [],
     filtered: [],
@@ -153,7 +159,11 @@
   function shapeOn() {
     if ($('#fMaBull').checked || $('#fAbove20').checked || $('#fMa20Up').checked
       || $('#fVolUp').checked || $('#fNew60').checked) return true;
-    return num('fGain5') != null || num('fPos') != null;
+    // 威科夫结构条件与形态共用同一次扫描（都是 260 根日线的尾部窗口结果）
+    if ($('#fWyInRange') && $('#fWyInRange').checked) return true;
+    if ($('#fWyPhase') && $('#fWyPhase').value) return true;
+    return num('fGain5') != null || num('fPos') != null
+      || num('fWyLowRise') != null || num('fWyPos') != null || num('fWyCause') != null;
   }
 
   function passShape(f) {
@@ -167,6 +177,23 @@
     if (g5 != null && !(f.gain5 >= g5)) return false;
     const posMin = num('fPos');
     if (posMin != null && !(f.pos >= posMin)) return false;
+
+    /* 威科夫结构条件：字段来自 shape.js 的 wyckoff2Of()，与详情页同一份计算。
+     * 没有 wy 的标的（数据不足 120 根）在启用任一结构条件时一律判为不合格 ——
+     * 宁可漏掉，也不能把「没算出来」当成「符合条件」。 */
+    const wyPh = $('#fWyPhase') ? $('#fWyPhase').value : '';
+    const wyLR = num('fWyLowRise');
+    const wyPos = num('fWyPos');
+    const wyCause = num('fWyCause');
+    const wyIn = $('#fWyInRange') && $('#fWyInRange').checked;
+    if (wyPh || wyLR != null || wyPos != null || wyCause != null || wyIn) {
+      if (!f.wy) return false;
+      if (wyPh && wyPh.split(',').indexOf(f.wy.phase) < 0) return false;
+      if (wyLR != null && !(f.wy.lowRise >= wyLR)) return false;
+      if (wyPos != null && !(f.wy.pos250 <= wyPos)) return false;
+      if (wyCause != null && !(f.wy.cause >= wyCause)) return false;
+      if (wyIn && !f.wy.inRange) return false;
+    }
     return true;
   }
 
@@ -278,6 +305,11 @@
     return list.slice().sort((a, b) => {
       let va = a[k], vb = b[k];
       if (k === 'screen') { va = a.screen ? a.screen.score : null; vb = b.screen ? b.screen.score : null; }
+      // 威科夫因子来自全池扫描（feats.wy），不依赖精算，筛选模式下也能排
+      if (k === 'wy') {
+        va = a.feats && a.feats.wy ? a.feats.wy.score : null;
+        vb = b.feats && b.feats.wy ? b.feats.wy.score : null;
+      }
       if (va == null && vb == null) return 0;
       if (va == null) return 1;
       if (vb == null) return -1;
@@ -310,9 +342,12 @@
       $('#tbSub').textContent = `· 已精算 ${S.result.length} 只 · ${stratName()}`;
     } else {
       const has = poolHave();
-      $('#tbSub').textContent = shapeOn()
+      let sub = shapeOn()
         ? `· 形态已覆盖 ${has}/${poolN} 只` + (S.scan.running ? '（扫描中）' : '')
         : '· 行情条件筛选（形态未启用）';
+      // 按威科夫因子排序时，未扫描的标的没有这个字段，会静默地排到最后 —— 必须说清楚
+      if (S.sort === 'wy' && has < poolN * 0.6) sub += ' · 威科夫因子覆盖不足，「扫描全池」后排序才完整';
+      $('#tbSub').textContent = sub;
     }
 
     if (!list.length) {
@@ -334,7 +369,12 @@
     const rows = shown.map((x, i) => {
       const sc = x.screen;
       const feat = x.feats || S.shape[x.code];
-      const tags = ((feat && feat.tags) || []).slice(0, 2).map((t) => `<i class="tag">${esc(t)}</i>`).join('');
+      const wy = feat && feat.wy;
+      const wyHtml = wy
+        ? `<i class="tag wy${wy.side < 0 ? ' dn' : ''}" title="${esc(wy.phaseName + '｜置信度 ' + (wy.conf === 'high' ? '高' : wy.conf === 'mid' ? '中' : '低') + '｜年内 ' + wy.pos250 + '% 分位｜充分度 ' + wy.cause)}">${esc(WY_TAG[wy.phase] || '')}</i>`
+        : '';
+      // 形态标签只留 1 个，把位置让给威科夫阶段徽章 —— 阶段比「放量 1.8×」更能说明结构
+      const tags = wyHtml + ((feat && feat.tags) || []).slice(0, 1).map((t) => `<i class="tag">${esc(t)}</i>`).join('');
       const scoreCell = sc
         ? `<div class="sc-cell"><b class="${sc.score > 0 ? 'up' : sc.score < 0 ? 'dn' : 'fl'}">${sc.score > 0 ? '+' : ''}${Math.round(sc.score)}</b></div>`
         : '<span class="mut">—</span>';
@@ -552,12 +592,13 @@
       t = setTimeout(refresh, 180);
     };
     $$('.sc-panel input, .sc-panel select').forEach((el) => {
-      if (el.id === 'fStrategy' || /^f(MaBull|Above20|Ma20Up|VolUp|New60|Gain5|Pos)$/.test(el.id)) return;
+      if (el.id === 'fStrategy' || /^f(MaBull|Above20|Ma20Up|VolUp|New60|Gain5|Pos|Wy)/.test(el.id)) return;
       el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', onInput);
     });
 
     // 形态条件：未覆盖全池时先补扫，扫的进度条会自己走
-    const shapeIds = ['fMaBull', 'fAbove20', 'fMa20Up', 'fVolUp', 'fNew60', 'fGain5', 'fPos'];
+    const shapeIds = ['fMaBull', 'fAbove20', 'fMa20Up', 'fVolUp', 'fNew60', 'fGain5', 'fPos',
+      'fWyPhase', 'fWyLowRise', 'fWyPos', 'fWyCause', 'fWyInRange'];
     shapeIds.forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -611,6 +652,7 @@
       shapeIds.forEach((id) => {
         const el = document.getElementById(id);
         if (el && el.type === 'checkbox') el.checked = false;
+        if (el && el.tagName === 'SELECT') el.value = '';
       });
       S.mode = 'filter';
       S.result = [];

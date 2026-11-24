@@ -10,6 +10,7 @@
  *   node tools/daily-close.js
  *   node tools/daily-close.js --date 2026-11-13 --from-local   # 回补单个历史日（本地合成快照）
  *   node tools/daily-close.js --backfill 20                    # 回补最近 20 个交易日（同进程循环）
+ *   node tools/daily-close.js --backfill 20 --from-cache       # 无上游库时用日线缓存合成快照
  *   node tools/daily-close.js --date 2026-11-13 --skip-fetch   # 用已有快照重跑
  *   node tools/daily-close.js --force                          # 强制重算对账
  *
@@ -62,6 +63,7 @@ async function collectCandidates() {
 async function runOne(date, opt) {
   const o = opt || {};
   const fromLocal = !!o.fromLocal;
+  const fromCache = !!o.fromCache;
   const fromTdx = !!o.fromTdx;
   const skipFetch = !!o.skipFetch;
   const skipSector = !!o.skipSector;
@@ -82,12 +84,17 @@ async function runOne(date, opt) {
   // ---- 3. 快照 ----
   let snapRec = null;
   if (fromTdx) {
-    // 回补：从通达信 K 线合成当日快照。比 --from-local 慢（5~6 分钟），
-    // 但不依赖本机市场库 —— 云端只能走这条。
+    // 从通达信网关逐只拉 K 线合成（~20 分钟，但覆盖全市场且任何机器都能用）。
+    // 与 fromLocal / fromCache 并列的第三种回补来源，显式 --from-tdx 才走。
     snapRec = await snapLib.captureFromTdx(date);
   } else if (fromLocal) {
     // 回补：从上游日线合成当日快照（不触网）。turnover/float_cap 上游没有，落 null。
     snapRec = await snapLib.captureFromLocal(date);
+  } else if (fromCache) {
+    /* 回补：没有上游 market.db 时，用板块取数时顺手落下的个股日线缓存合成。
+     * 覆盖率约 67%（只含板块成分股），因此 complete=false、derived=true，
+     * 下游据此知道这是一份不完整快照。 */
+    snapRec = await snapLib.captureFromCachedKlines(date);
   } else if (!skipFetch) {
     snapRec = await snapLib.capture(date);
   } else {
@@ -121,8 +128,7 @@ async function runOne(date, opt) {
       const sr = await sectordata.capture({
         date,
         reuse: !!o.reuse,
-        // --from-tdx 是「本机没有市场库」的场景，成分不能从库里读（本来就是空的）
-        membersFrom: o.fromTdx ? 'network' : (o.membersFrom || 'network'),
+        membersFrom: o.membersFrom || 'network',
       });
       strengthRows = sr.rows;
       log.info('daily-close.sector', {
@@ -138,18 +144,24 @@ async function runOne(date, opt) {
 
   // ---- 5. 对账（先于预判） ----
   // 找出所有「目标日 <= 今天 且 尚未对账」的预判，逐条对账
-  const recentPreds = await st.query('prediction', { order: 'date', desc: true, limit: 10 });
+  //
+  // limit 原本是 10：回补 15 天时，第 11 天以前的预判根本不在遍历范围里，
+  // 那些天永远等不到自己的对账（实测 10-29 ~ 11-04 六天一直是 skipped 且不自愈）。
+  // 放宽到 120 覆盖四个多月，足够任何回补场景。
+  const recentPreds = await st.query('prediction', { order: 'date', desc: true, limit: 120 });
+  // 一次取全已对账日期，避免逐条查库（回补时那是 120×N 次往返）
+  const recAll = await st.query('reconcile', { order: 'date', desc: true, limit: 500 });
+  const doneSet = new Set(recAll.map((r) => String(r.date)));
   let reconciled = 0;
   let pendingCount = 0;
 
   for (const p of recentPreds) {
-    if (p.date >= date) continue;                       // 今天及以后的预判还没到期
+    if (String(p.date) >= date) continue;               // 今天及以后的预判还没到期
     const payload = p.payload || {};
     const target = payload.targetDate || p.target_date;
-    if (!target || target > date) continue;             // 目标日还没到
+    if (!target || String(target) > date) continue;     // 目标日还没到
 
-    const done = await st.query('reconcile', { where: { date: p.date } });
-    if (done.length && !force) continue;                // 已对账（幂等）
+    if (doneSet.has(String(p.date)) && !force) continue;  // 已对账（幂等）
 
     pendingCount++;
     const prevMap = await snapLib.readMap(p.date);
@@ -165,6 +177,7 @@ async function runOne(date, opt) {
       skipped: result.skipped,
       payload: result,
     }]);
+    doneSet.add(String(p.date));
 
     payload.reconcile = result;
     await st.upsert('prediction', [{
@@ -357,7 +370,19 @@ async function runOne(date, opt) {
 
 /** 多日回补时取最近 n 个交易日（升序） */
 async function recentTradingDays(n) {
-  const days = await localdb.sessionDates(n);
+  try {
+    const days = await localdb.sessionDates(n);
+    if (days && days.length) return days.slice(-n);
+  } catch (e) {
+    /* 没有上游 market.db 时 sessionDates 会抛错，回补就整轮跑不起来。
+     * 交易日历不必依赖上游库：上证指数的日线序列本身就是最权威的交易日历，
+     * 网络源（同花顺/新浪）随手就能给几年，用它兜底即可。 */
+    log.warn('daily-close.session_dates_local_failed', { error: e.message });
+  }
+  const idx = await ds.resolve({ kind: 'kline-daily', code: 'sh000001', bars: Math.max(120, n + 40) });
+  const days = (idx.rows || []).map((r) => String(r[0]).slice(0, 10)).sort();
+  if (!days.length) throw new Error('取不到上证指数日线，无法枚举交易日');
+  log.info('daily-close.session_dates_from_index', { total: days.length, take: n, source: idx.source });
   return days.slice(-n);
 }
 
@@ -370,6 +395,7 @@ async function main() {
 
   let dates;
   let fromLocal = has('from-local');
+  let fromCache = has('from-cache');
   const fromTdx = has('from-tdx');
 
   if (backfillN) {
@@ -377,9 +403,44 @@ async function main() {
       throw new Error('--backfill 需要一个正整数，例如 --backfill 20');
     }
     dates = await recentTradingDays(Math.min(250, Math.floor(backfillN)));
-    // 回补一律走合成：历史日抓不到当时的实时快照，混用来源会让命中率序列
-    // 的口径不一致（G4）。默认用本地库（快）；显式加 --from-tdx 时走网关。
-    if (!fromTdx) fromLocal = true;
+    /* 回补一律走合成快照（历史日抓不到当时的实时快照，混用两种来源会让
+     * 命中率序列的口径不一致）。合成有两种来源，按本机条件自动选：
+     *   有上游 market.db → captureFromLocal（A 级，完整）
+     *   没有            → captureFromCachedKlines（B 级，覆盖率约 67%，带 derived）
+     * 第三种来源 --from-tdx：通达信网关逐只拉 K 线，覆盖全市场但约 20 分钟（本项目主线）
+     * 显式 --from-cache / --from-local 可强制指定。 */
+    if (!fromTdx && !fromCache && !fromLocal) {
+      const mkt = config.localDb && config.localDb.marketDb ? config.abs(config.localDb.marketDb) : null;
+      const fsMod = require('fs');
+      if (mkt && fsMod.existsSync(mkt)) {
+        fromLocal = true;
+      } else {
+        fromCache = true;
+        log.warn('daily-close.backfill_use_cache', {
+          reason: '未配置上游 market.db，回补改用个股日线缓存合成（derived）',
+        });
+        /* 预热：合成快照要 complete=true（≥ integrity.minSnapshotCount 只）才会被
+         * 对账采用，而板块成分股只覆盖约 67%（3379/5579），回补出来的快照会全部判
+         * skipped，判断力画像永远是空的。
+         * 这里把当日快照里的全市场代码补进日线缓存，让合成覆盖率抬到全市场。
+         * 缓存有增量语义：已存在的不会重拉，所以只有第一次慢。 */
+        try {
+          const mk = require('../lib/sources/member-klines');
+          const todayStr = await ds.todayStr();
+          const sm = await snapLib.readMap(todayStr);
+          const codes = Array.from(sm.keys());
+          if (codes.length) {
+            log.info('daily-close.warm_cache', { codes: codes.length });
+            const w = await mk.readNetworkKlines(codes, 250, { date: todayStr });
+            log.info('daily-close.warm_cache_done', {
+              ok: Object.keys(w.rows).length, missing: w.missing.length, fromCache: w.fromCache,
+            });
+          }
+        } catch (e) {
+          log.warn('daily-close.warm_cache_failed', { error: e.message });
+        }
+      }
+    }
     log.info('daily-close.backfill', { days: dates.length, from: dates[0], to: dates[dates.length - 1] });
   } else if (overrideDate) {
     dates = [overrideDate];
@@ -391,8 +452,14 @@ async function main() {
 
   // 回补模式必须显式给日期：不给就会拿「今天」去合成，而今天上游库通常还没有日线，
   // 报错会很难懂。这里提前拦住，把用法说清楚。
-  if ((fromLocal || fromTdx) && !overrideDate && !backfillN) {
-    throw new Error('--from-local / --from-tdx 必须配合 --date YYYY-MM-DD 或 --backfill N');
+  if (fromLocal && !overrideDate && !backfillN) {
+    throw new Error('--from-local 必须配合 --date YYYY-MM-DD 或 --backfill N');
+  }
+  if (fromTdx && !overrideDate && !backfillN) {
+    throw new Error('--from-tdx 必须配合 --date YYYY-MM-DD 或 --backfill N');
+  }
+  if (fromCache && !overrideDate && !backfillN) {
+    throw new Error('--from-cache 必须配合 --date YYYY-MM-DD 或 --backfill N');
   }
 
   const st = await store.open();
@@ -400,6 +467,7 @@ async function main() {
 
   const opt = {
     fromLocal,
+    fromCache,
     fromTdx,
     skipFetch: has('skip-fetch'),
     skipSector: has('skip-sector'),

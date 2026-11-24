@@ -58,6 +58,7 @@
       <button role="tab" id="t-sig" aria-selected="false" aria-controls="p-sig" tabindex="-1">信号</button>
       <button role="tab" id="t-track" aria-selected="false" aria-controls="p-track" tabindex="-1">跟踪</button>
       <button role="tab" id="t-batch" aria-selected="false" aria-controls="p-batch" tabindex="-1">批量</button>
+      <button role="tab" id="t-pick" aria-selected="false" aria-controls="p-pick" tabindex="-1">选股</button>
     </div>
 
     <!-- ========== 1. 编辑器 ========== -->
@@ -307,6 +308,150 @@
           </table>
         </div>
         <div class="lab-empty" id="batch-empty" hidden>暂无策略可对比。请先在「编辑器」中保存策略。</div>
+      </div>
+    </div>
+
+    <!-- ========== 6. 公式选股 ========== -->
+    <div role="tabpanel" id="p-pick" aria-labelledby="t-pick" tabindex="0" hidden>
+      <div class="panel-pad">
+        <div class="panel-head">
+          <h2 class="sect-h">公式选股</h2>
+          <span class="lab-sub" id="pick-scope-note">按成交额取前 N 只（可限定主板），逐只跑同一条公式，报最近几个月是否触发</span>
+        </div>
+
+        <div class="lab-grid">
+          <div class="stack">
+            <div class="field">
+              <label for="pick-formula">公式源码</label>
+              <textarea id="pick-formula" class="pick-src" spellcheck="false"
+                placeholder="粘贴通达信选股公式，最后一条用 : 输出信号（例如 XG:...;）"></textarea>
+              <p class="lab-sub">
+                结果表会读取名为 <b>偏离</b> / <b>箱位</b> / <b>量位</b> 的三条中间量；公式里没有则显示「—」。
+                月末未走完的最后一根会自动剔除 —— 半根月线的成交量会把「地量」判成假信号。
+              </p>
+            </div>
+
+            <div class="row2">
+              <div class="field">
+                <label for="pick-line">输出线（手选）</label>
+                <input id="pick-line" type="text" value="XG" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="pick-period">周期</label>
+                <select id="pick-period">
+                  <option value="month">月线</option>
+                  <option value="week">周线</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row2">
+              <div class="field">
+                <label for="pick-board">板块范围</label>
+                <select id="pick-board">
+                  <option value="" selected>全部 A 股（含创业板/科创板）</option>
+                  <option value="main">仅沪深主板（10cm）</option>
+                  <option value="gem">仅创业板（20cm）</option>
+                  <option value="star">仅科创板（20cm）</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="pick-limit">扫描范围（按成交额降序）</label>
+                <select id="pick-limit">
+                  <option value="400">前 400 只（约 2 分钟）</option>
+                  <option value="800">前 800 只（约 4 分钟）</option>
+                  <option value="1200" selected>前 1200 只（约 6 分钟）</option>
+                  <option value="2500">前 2500 只</option>
+                  <option value="6000">全部 A 股（不含北交所）</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row2">
+              <div class="field">
+                <label for="pick-months">回溯窗口</label>
+                <select id="pick-months">
+                  <option value="1">只看最新一根</option>
+                  <option value="3">近 3 个月</option>
+                  <option value="12" selected>近 12 个月</option>
+                  <option value="36">近 36 个月</option>
+                  <option value="120">全部历史</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="toolbar">
+              <span class="lab-guard" id="pick-note">首次扫描要逐只拉月线，较慢；同一天再跑会走当日缓存</span>
+              <span class="grow"></span>
+              <button class="btn btn-primary" type="button" id="pick-run">开始扫描</button>
+            </div>
+
+            <div class="lab-progress" id="pick-progress" hidden>
+              <div class="lab-progress-head">
+                <span id="pick-progress-text">任务已提交…</span>
+                <span class="num" id="pick-progress-pct"></span>
+              </div>
+              <div class="lab-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="选股进度">
+                <div class="lab-progress-fill" id="pick-progress-fill"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stack">
+            <div class="card card-inner">
+              <div class="card-hd">
+                <h3>拥挤度判读</h3>
+                <span class="chip chip-c" id="pick-crowd-chip">未扫描</span>
+              </div>
+              <div class="card-bd">
+                <div id="pick-crowd" class="pick-crowd">
+                  <p class="lab-sub">命中数不是「越多越好买」，而是「越多越像底部」。扫一次看判读。</p>
+                </div>
+              </div>
+            </div>
+            <div class="card card-inner">
+              <div class="card-hd"><h3>样本统计</h3></div>
+              <div class="card-bd">
+                <p class="lab-sub" id="pick-stat-note">
+                  历史基准只适用于月线三重底公式（715 只 / 598 个信号，2020-11~2026-10，月线 12 个月持有：
+                  均值 +22.9%、中位 +16.3%、胜率 72.9%，同期全市场 +11.9%）。
+                  换其它公式时这里会改为说明「无同口径样本」，不会把三重底的成绩算在当前公式头上。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="pick-result" hidden>
+          <h2 class="sect-h">按月份分布</h2>
+          <p class="lab-sub">同一月份命中越多，越接近「市场级超跌」；孤零零一两只多半是个股自身出问题。</p>
+          <div class="tbl-wrap" id="pick-months-wrap" hidden>
+            <table class="tbl">
+              <caption>各月命中数（点击月份可筛选明细）</caption>
+              <thead><tr><th style="width:34%">月份</th><th class="r" style="width:16%">命中</th><th>判读</th></tr></thead>
+              <tbody id="pick-months-tbody"></tbody>
+            </table>
+          </div>
+
+          <h2 class="sect-h">命中明细</h2>
+          <div class="tbl-wrap" id="pick-hits-wrap" hidden>
+            <table class="tbl">
+              <caption>按信号月份倒序；偏离越深越靠前</caption>
+              <thead>
+                <tr>
+                  <th>代码</th><th>名称</th><th>信号月</th>
+                  <th class="r">偏离</th><th class="r">箱位</th><th class="r">量位</th>
+                  <th class="r">当月收盘</th><th class="r">距今</th>
+                </tr>
+              </thead>
+              <tbody id="pick-hits-tbody"></tbody>
+            </table>
+          </div>
+          <div class="pick-more" id="pick-more" hidden>
+            <button class="btn btn-sm" type="button" id="pick-more-btn">展开全部</button>
+          </div>
+          <div class="lab-empty" id="pick-empty" hidden>该窗口内没有命中。月线信号一年也就几次，空结果是常态。</div>
+        </div>
       </div>
     </div>
   </div>

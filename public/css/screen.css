@@ -295,3 +295,7 @@ body.pnl-open .sc-fab{opacity:0;pointer-events:none}
 .grp-t,.scan-info,.hint,.sc-tbl thead th,
 .sc-tbl tbody td.c-name .cd,.tag,
 .sc-tbl thead th.on::after{font-size:12px}
+
+/* 威科夫 v2 阶段徽章：与普通形态标签区分，用橄榄绿；偏空的阶段换青色以免误读成看多 */
+.tag.wy{background:rgba(154,217,75,.10);color:#9AD94B;border-color:rgba(154,217,75,.32);font-weight:700}
+.tag.wy.dn{background:rgba(46,189,133,.10);color:#2EBD85;border-color:rgba(46,189,133,.32)}

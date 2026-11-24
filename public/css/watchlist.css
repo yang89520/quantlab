@@ -113,7 +113,7 @@ main{max-width:1780px;grid-template-columns:236px 296px minmax(0,1fr);gap:16px}
 }
 
 /* 手机上侧栏高度有限：指数条改成单行横滑，别把分组挤没了 */
-@media(max-width:760px){
+@media(max-width:760px),(max-height:540px){
   .idx-bar{padding:0 8px 8px;border-bottom:0}
   .idx-hd{padding:0 2px 5px}
   .idx-chips{
@@ -275,7 +275,7 @@ main{max-width:1780px;grid-template-columns:236px 296px minmax(0,1fr);gap:16px}
 .err-b:hover{background:#1E3454;color:#C3D8FF}
 
 /* ---------- 小屏适配 ---------- */
-@media(max-width:760px){
+@media(max-width:760px),(max-height:540px){
   main{padding:12px 10px 44px;gap:12px}
   .hd{padding:10px 12px;gap:10px}
   /* 小屏把评分环提到第一行右侧，股票信息独占第二行，避免中间大片空白 */
@@ -348,10 +348,10 @@ html.touch .sb-search input{font-size:16px;height:38px}
 html.touch .inline-new input,
 html.touch .rename-in,
 html.touch .sh-in{font-size:16px}
-/* 22×22 是鼠标尺寸，手指点不中；触屏档统一撑到 32×32 */
-html.touch .icon-btn{width:32px;height:32px;font-size:15px}
-/* 有些环境（Pad/部分安卓 WebView）不置 html.touch，靠宽度兜住 */
-@media(max-width:760px){
+html.touch .icon-btn{width:32px;height:32px;font-size:15px}   /* 22×22 是鼠标尺寸，手指点不中 */
+
+/* 有些环境（Pad / 部分安卓 WebView）不置 html.touch，靠宽度兜住 */
+@media(max-width:760px),(max-height:540px){
   .icon-btn{width:32px;height:32px}
 }
 html.touch .sug{top:50px}
@@ -505,7 +505,7 @@ html.touch .inline-new button{height:36px;padding:0 12px}
   border-radius:9px;padding:1px 6px;font-family:ui-monospace,monospace;
 }
 
-@media(max-width:760px){
+@media(max-width:760px),(max-height:540px){
   .sb-fold{display:inline-flex;width:32px;height:32px;font-size:14px;margin-left:-4px}
   .sb-ct{display:inline-block}
   .sidebar{max-height:min(56vh,420px)}
@@ -522,11 +522,14 @@ html.touch .inline-new button{height:36px;padding:0 12px}
   .sidebar.folded .sb-hd{border-bottom:0}
 }
 
-/* ---------- 移动端图表工具栏：周期切换优先 ---------- */
-@media(max-width:760px){
+/* ---------- 移动端图表工具栏：周期、根数都要能用 ----------
+ * 以前手机上把「根数」整组藏了，只剩 90 根看三个月，想拉长历史没有入口。
+ * 现在放开，改由「副图跟随流派」缩成「副图」来腾地方。 */
+@media(max-width:760px),(max-height:540px){
   .chart-bar{padding:8px 10px 10px;gap:8px}
-  .chart-bar .sp{display:none}
-  #grpBars{display:none}
-  .chart-bar .btn{padding:5px 11px;font-size:11.5px}
-  .chart-bar .grp span{font-size:10px}
+  .chart-bar .btn{padding:5px 10px;font-size:11.5px}
+  .chart-bar .grp>span{display:none}
+  .chart-bar .grp{margin-left:0!important}
+  .lbl-full{display:none}
+  .lbl-short{display:inline}
 }

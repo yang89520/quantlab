@@ -154,6 +154,36 @@
     </div>
 
     <div class="grp">
+      <div class="grp-t">威科夫结构（全池扫描）</div>
+      <label class="row1">阶段
+        <select id="fWyPhase">
+          <option value="">不限</option>
+          <option value="accumC,accumC0">吸筹 C 段（弹簧已现）</option>
+          <option value="accumD,accumD0">吸筹 D 段（SOS 之后）</option>
+          <option value="accumB">吸筹 B 段（低点抬高）</option>
+          <option value="markup">上升 E 段（已突破）</option>
+          <option value="markdown">下跌段</option>
+          <option value="weak">区间内走弱</option>
+          <option value="distrib">派发</option>
+          <option value="range,transition">中性 / 过渡</option>
+        </select>
+      </label>
+      <div class="row2">
+        <label>低点抬高 ≥<input type="number" id="fWyLowRise" placeholder="不限" step="1" min="0" max="4"></label>
+        <label>年内位置 ≤<input type="number" id="fWyPos" placeholder="不限" step="10" min="0" max="100"></label>
+      </div>
+      <label class="row1">建仓充分度 ≥
+        <select id="fWyCause">
+          <option value="">不限</option>
+          <option value="45">45 · 时间中等</option>
+          <option value="70">70 · 横得够久</option>
+        </select>
+      </label>
+      <label class="chk"><input type="checkbox" id="fWyInRange"><span>现价仍在区间内（未突破 / 未跌破）</span></label>
+      <div class="hint">与上方「形态」共用同一次全池扫描（260 根日线），不用重复扫描；判定与详情页「威科夫 v2」完全一致。</div>
+    </div>
+
+    <div class="grp">
       <div class="grp-t">按流派精算</div>
       <label class="row1">流派
         <select id="fStrategy"></select>
@@ -178,6 +208,7 @@
           <option value="turnover">换手率</option>
           <option value="floatCap">流通市值</option>
           <option value="amplitude">振幅</option>
+          <option value="wy">威科夫 v2 因子</option>
           <option value="screen" disabled>流派评分（精算后）</option>
         </select>
         <button class="btn-ghost sm" id="sortDir" data-dir="-1">降序 ↓</button>
@@ -218,6 +249,8 @@
 <button class="sc-fab" id="fabFilter">筛选</button>
 
 <script src="/js/indicators.js"></script>
+<script src="/js/flow-signal.js"></script>
+<script src="/js/kalman.js"></script>
 <script src="/js/strategies.js"></script>
 <script src="/js/shape.js"></script>
 <script src="/js/app.js"></script>

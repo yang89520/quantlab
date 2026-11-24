@@ -4240,6 +4240,291 @@
    *   · 震荡市占比高：A 股大部分时间在箱体里磨，原文自己说的「小亏一串」在这里会被放大，
    *     所以必须把历史假翻转率（whip）与 ADX 一起摆到台面上，震荡环境直接压分。
    * ============================================================ */
+  /* ============================================================
+   * 威科夫 v2 · 三律合参（Wyckoff v2）
+   *
+   * v1 回答「现在像哪一段」，v2 补三样 v1 没有的东西：
+   *   ① 摆动序列：低点/高点是不是逐级抬（降）—— 结构最硬的证据，v1 没有序列概念；
+   *   ② 因果测度：区间磨多久、边界被测试几次、波动是否收敛，合成「建仓充分度」；
+   *   ③ 证据投票：阶段结论必须带票数与反证条件，不许只丢一个标签。
+   *
+   * 全部结构计算在 public/js/shape.js 的 wyckoff2Of()，与选股页共用同一份实现。
+   * 这里只做两件事：把结构画到图上、把结构翻译成人话。
+   * ============================================================ */
+  /* 同一份 data 只算一次：overlay 与 analyze 都会调，周/月线切换时 data 换新对象，缓存自然失效 */
+  const _wy2cache = new WeakMap();
+  function wy2(ctx) {
+    const rows = ctx.data;
+    if (!rows || !rows.length) return null;
+    let v = _wy2cache.get(rows);
+    if (v !== undefined) return v;
+    const S = window.QLShape;
+    if (!S || typeof S.wyckoff2Of !== 'function') { _wy2cache.set(rows, null); return null; }
+    const arr = rows.map((x) => [x.d, x.o, x.c, x.h, x.l, x.v, x.a || 0]);
+    v = S.wyckoff2Of(arr);
+    _wy2cache.set(rows, v);
+    return v;
+  }
+
+  QL.registerStrategy({
+    id: 'wyckoff2',
+    name: '威科夫 v2',
+    short: '威2',
+    color: '#9AD94B',
+    sub: 'wy2',
+    desc: '三律合参 · 摆动序列 · 因果厚度 · 证据投票与反证',
+
+    overlay(ctx) {
+      const { data } = ctx;
+      const W = wy2(ctx);
+      if (!W) return [];
+      const n = ctx.n, vs = ctx.helpers.vspan();
+      const out = [];
+
+      /* 区间：这里是全部判断的坐标系，先画出来 */
+      if (W.isRange && W.rangeStart != null) {
+        const x1 = Math.max(vs.lo, W.rangeStart);
+        const x2 = Math.min(n - 1, vs.hi - 1);
+        if (x2 > x1) {
+          out.push(...box4(x1, x2, W.sup, W.res, 'rgba(154,217,75,.5)', [5, 4]));
+          out.push({ type: 'line', pts: [[x1, W.mid], [x2, W.mid]], color: 'rgba(154,217,75,.26)', width: 1, dash: [2, 4] });
+          out.push({ type: 'label', i: x2, p: W.res, text: '阻力 ' + W.res.toFixed(2), color: 'rgba(154,217,75,.9)', align: 'right', dy: -11, size: 10 });
+          out.push({ type: 'label', i: x2, p: W.sup, text: '支撑 ' + W.sup.toFixed(2), color: 'rgba(154,217,75,.9)', align: 'right', dy: -11, size: 10 });
+        }
+      }
+
+      /* 摆动序列：把最近 5 个摆动点连成折线。
+       * 这条线的斜率就是「结构」本身 —— 低点连线向上是需求在承接，
+       * 向下是供给在压价，比任何指标都直观。只在缩放足够宽时才画，
+       * 否则点挤在一起反而看不清。 */
+      const drawSeq = (pts, color) => {
+        const vis = pts.filter((p) => p.i >= vs.lo && p.i < vs.hi);
+        if (vis.length < 2) return;
+        const seg = vis.map((p) => [p.i, p.p]);
+        out.push({ type: 'line', pts: seg, color, width: 1.4, dash: [3, 3], alpha: .9 });
+        for (const p of vis) out.push({ type: 'dot', i: p.i, p: p.p, color, r: 2.2 });
+      };
+      drawSeq(W.swings.lo, 'rgba(46,189,133,.75)');
+      drawSeq(W.swings.hi, 'rgba(246,70,93,.55)');
+
+      /* 事件：14 种，按含义分冷暖色 —— 吸筹暖、派发冷，A 股「红涨绿跌」不适用于这里，
+       * 这里的颜色编码的是「对多头的含义」而不是涨跌，所以红=强势、绿=破位。 */
+      const CFG = {
+        SP: { t: '弹簧', c: '#FFD166', prio: 1 },
+        TEST: { t: '测试', c: '#F0B429', prio: 4 },
+        SOS: { t: 'SOS', c: '#F6465D', prio: 2 },
+        LPS: { t: 'LPS', c: '#FF9F43', prio: 3 },
+        JAC: { t: '突破', c: '#FF6B9D', prio: 3 },
+        BUEC: { t: '回踩', c: '#E8B84B', prio: 5 },
+        SC: { t: '抛售潮', c: '#4C8DFF', prio: 5 },
+        ST: { t: '二测', c: '#8FA3BF', prio: 7 },
+        NS: { t: '无供给', c: '#6FD3C7', prio: 7 },
+        BC: { t: '买入潮', c: '#2EBD85', prio: 5 },
+        UT: { t: '假突破', c: '#A882FF', prio: 2 },
+        SOW: { t: '破位', c: '#2EBD85', prio: 3 },
+        SHK: { t: '震仓', c: '#FF8A3D', prio: 4 },
+        ND: { t: '无需求', c: '#8FA3BF', prio: 7 },
+      };
+      const cands = [];
+      for (const m of W.marks) {
+        if (m.i < vs.lo || m.i >= vs.hi) continue;
+        const cfg = CFG[m.type];
+        if (!cfg) continue;
+        cands.push({
+          i: m.i, prio: cfg.prio,
+          m: {
+            text: cfg.t, color: cfg.c, above: m.above,
+            r: cfg.prio <= 2 ? 3.7 : 2.9,
+            bold: cfg.prio <= 2,
+          },
+        });
+      }
+      for (const { i, m } of ctx.helpers.pickMarks(cands, 44, null)) {
+        out.push({
+          type: 'marker', i, p: m.above ? data[i].h : data[i].l,
+          color: m.color, text: m.text, pos: m.above ? 'above' : 'below',
+          r: m.r, bold: m.bold,
+          align: i > n - 12 ? 'right' : (i < vs.lo + 6 ? 'left' : 'center'),
+        });
+      }
+
+      return out;
+    },
+
+    analyze(ctx) {
+      const { data } = ctx;
+      const n = ctx.n, i = n - 1;
+      const pts = [];
+      const c = data[i].c;
+
+      if (!window.QLShape || typeof window.QLShape.wyckoff2Of !== 'function') {
+        return { score: 0, verdict: '形态模块（shape.js）未加载，威科夫 v2 无法读取结构。刷新页面重试。', points: [{ k: '模块', v: 'shape.js 缺失' }] };
+      }
+      if (n < 120) {
+        return {
+          score: 0,
+          verdict: `历史数据只有 ${n} 根，威科夫 v2 需要至少 120 根才能读出摆动序列与交易区间。数据不够时不硬套结构。`,
+          points: [{ k: '数据', v: `仅 ${n} 根` }],
+        };
+      }
+
+      const W = wy2(ctx);
+      if (!W) {
+        return { score: 0, verdict: `结构计算返回空值（${n} 根数据），可能是价格序列异常。`, points: [{ k: '数据', v: `${n} 根` }] };
+      }
+
+      /* ① 阶段 + 置信度 */
+      const CNF = { high: '高', mid: '中', low: '低' };
+      const votes = W.evid.length;
+      pts.push({
+        k: '阶段',
+        v: `${W.phaseName} · 置信度${CNF[W.conf]}（${W.confPct}% 证据一致${votes ? '：' + W.evid.join('、') : ''}）`,
+      });
+
+      /* ② 位置：年内分位与区间内分位要分开说，两者含义不同。
+       * posInRange 是「在区间高度上的百分比位置」，<0 / >100 表示已经跌出/冲出筹码带，
+       * 这时不能再说「处在区间 X% 分位」，得直接说跌破/突破了多少。 */
+      /* 跌破/突破时改用「价格偏离筹码带多少」来说，而不是「% 分位」——
+       * 负分位没有任何可读性，而价格偏离是能直接对照盘面的数。 */
+      const posTxt = W.inRange
+        ? `区间 ${W.posInRange}% 分位`
+        : W.posInRange > 100
+          ? `高于筹码带上沿 ${((c / W.res - 1) * 100).toFixed(1)}%`
+          : `低于筹码带下沿 ${((1 - c / W.sup) * 100).toFixed(1)}%`;
+      if (W.isRange) {
+        pts.push({
+          k: '位置',
+          v: `年内 ${W.pos250}% 分位；区间 ${W.w} 根筹码带（${W.sup.toFixed(2)}~${W.res.toFixed(2)}），`
+            + `现价 ${c.toFixed(2)} ${posTxt}`,
+        });
+      } else {
+        pts.push({
+          k: '位置',
+          v: `年内 ${W.pos250}% 分位；最近 60 根 ${W.ret60 >= 0 ? '+' : ''}${W.ret60}%。横盘结构不成立（净位移超过区间高度 60%），以下判断按趋势口径`,
+        });
+      }
+
+      /* ③ 摆动序列：v2 的核心证据 */
+      const seqTxt = (up, down, what) => `${what}抬高 ${up} 次 / 下移 ${down} 次`;
+      pts.push({
+        k: '摆动序列',
+        v: `${seqTxt(W.lowRise, W.lowFall, '低点')}，${seqTxt(W.hiRise, W.hiFall, '高点')}`
+          + `（最近 6 个 2 左 2 右分形点${W.lowLast && W.hiLast ? `，最近低点 ${W.lowLast}、最近高点 ${W.hiLast}` : ''}）`
+          + (W.lowFall > W.lowRise ? ' —— 低点净下移，供给在压价' : W.lowRise > W.lowFall ? ' —— 低点净抬高，需求在承接' : ' —— 序列走平，方向未定')
+          + (W.hiFall > W.hiRise ? '；高点同步下移' : W.hiRise > W.hiFall ? '；高点同步抬高' : ''),
+      });
+
+      /* ④ 最近事件：最多 3 个，按新鲜度排 */
+      const EN = {
+        SP: '弹簧（spring）', TEST: '弹簧测试（test）', SOS: '强势信号（SOS）', LPS: '最后支撑（LPS）',
+        JAC: '跳过小溪（JAC）', BUEC: '回踩溪边（BUEC）', SC: '抛售高潮', ST: '缩量二次测试',
+        NS: '无供给', BC: '买入高潮', UT: '上冲回落（upthrust）', SOW: '弱势信号（SOW）',
+        SHK: '震仓（shakeout）', ND: '无需求',
+      };
+      const evs = Object.keys(W.ev)
+        .filter((k) => W.ev[k] >= 0 && i - W.ev[k] <= 45)
+        .map((k) => ({ k, age: i - W.ev[k] }))
+        .sort((a, b) => a.age - b.age)
+        .slice(0, 3);
+      if (evs.length) {
+        pts.push({
+          k: '结构事件',
+          v: evs.map((e) => {
+            const idx = W.ev[e.k];
+            const b = data[idx];
+            let note = '';
+            // 事件是「当时成立」，不等于「现在还成立」。看多类事件要看它的低点/收盘有没有被吞掉
+            if (b && (e.k === 'SP' || e.k === 'TEST' || e.k === 'LPS' || e.k === 'BUEC') && b.l > c) {
+              note = `，低点 ${b.l.toFixed(2)} 已被跌破`;
+            } else if (b && (e.k === 'SOS' || e.k === 'JAC') && c < b.c) {
+              note = `，那根收盘 ${b.c.toFixed(2)} 已被回落吞掉`;
+            } else if (b && (e.k === 'UT' || e.k === 'SOW' || e.k === 'BC' || e.k === 'ND') && c > b.c) {
+              note = `，已被收盘 ${c.toFixed(2)} 反超`;
+            }
+            return `${EN[e.k]}（${e.age === 0 ? '最新一根' : e.age + ' 根前'}${note}）`;
+          }).join('；')
+            + ' —— 事件本身只是「发生过什么」，含义要看它落在区间哪个位置、以及有没有失效',
+        });
+      } else {
+        pts.push({ k: '结构事件', v: '近 45 根没有可识别的威科夫事件，结构还在形成中' });
+      }
+
+      /* ⑤ 第三定律：努力与结果 */
+      const effTxt = W.eff > 0.3 ? '单边上行，位移效率高' : W.eff < -0.3 ? '单边下行，位移效率高（方向向下）' : '来回震荡，净位移小';
+      pts.push({
+        k: '努力/结果',
+        v: `上涨日量能是下跌日的 ${W.sr.toFixed(2)} 倍；近 20 根路径效率 ${(W.eff * 100).toFixed(0)}%（${effTxt}）`
+          + (W.stall > 0 ? `；有 ${W.stall} 天放量却推不动（量比 ≥2、位移不足 0.6 ATR）` : '；无放量滞涨'),
+      });
+
+      /* ⑥ 第二定律：因果厚度 */
+      if (W.isRange) {
+        pts.push({
+          k: '因果',
+          v: `区间 ${W.w} 根、边界被测试 ${W.tests} 次，建仓充分度 ${W.cause}/100`
+            + (W.cause >= 70 ? ' —— 横得够久，筹码换手充分' : W.cause >= 45 ? ' —— 时间中等，因还谈不上厚' : ' —— 区间太短，因果关系薄弱')
+            + '。注意：因果厚度描述的是「磨了多久」，不保证「往哪边走」——横得再久，向下突破同样是它的果',
+        });
+      } else {
+        pts.push({ k: '因果', v: '没有有效横盘区间，因果定律无从计算 —— 趋势段落里不谈「横有多长竖有多高」' });
+      }
+
+      /* ⑦ 反证条件：v2 与 v1 最大的差别，必须显式给出 */
+      if (W.against.length) {
+        pts.push({ k: '反证条件', v: W.against.slice(0, 2).join('；') });
+      }
+
+      /* ⑧ A 股适配 */
+      if (ctx.period === 'day') {
+        const rate = limitRate(ctx);
+        let limUp = -1;
+        for (let k = i; k >= Math.max(1, i - 15); k--) if (isLimitUp(ctx, k, rate)) { limUp = k; break; }
+        if (limUp >= 0 && i - limUp <= 8) {
+          pts.push({ k: 'A股适配', v: `${i - limUp} 根前涨停（${boardName(rate)}）。涨停日的量价在威科夫口径里失真（买不进、封单不算换手），若 SOS/JAC 以涨停出现，要等次日回踩确认` });
+        }
+      }
+
+      let s = W.score;
+      /* 周期适配：周/月线的 250 根窗口对应更长的历史，阈值没跟着放大，
+       * 结构含义仍在，但不能把日线的分数直接当周线用 */
+      if (ctx.period !== 'day') {
+        s = Math.round(s * 0.8);
+        pts.push({ k: '周期', v: `${ctx.periodName}口径。区间与事件按 ${W.w} 根计算，相当于更长的历史跨度，信号新鲜度的判断要放宽` });
+      }
+      s = clamp(s, -100, 100);
+
+      /* ---- 结论 ---- */
+      let verdict;
+      const px = c.toFixed(2);
+      const supT = W.sup.toFixed(2), resT = W.res.toFixed(2);
+      if (W.phase === 'accumC') {
+        verdict = `吸筹 C 段成立：跌破 ${supT} 后收回、随后缩量测试且价格回到区间中部（现价 ${px}，${posTxt}）。C 段是威科夫全套里证据最集中的位置，但证据集中不等于结果确定 —— 证伪条件很明确：跌回弹簧低点下方且放量，这个假设当场作废。`;
+      } else if (W.phase === 'accumC0') {
+        verdict = `弹簧已经出现（跌破 ${supT} 又收回，现价 ${px}），但还缺缩量测试那一步。原文对 C 段的要求是「弹簧 + 测试」两个动作都完成，现在只有前半段。二次探底的风险由市场承担，不是由判断承担。`;
+      } else if (W.phase === 'accumD') {
+        verdict = `吸筹 D 段：SOS 放量向上之后有缩量回踩，且价格守在区间上半部（${W.posInRange}% 分位）。需求接管、供给枯竭的样貌齐了。需要确认的是 ${resT} 能不能被放量拿下 —— 拿不下就还是 D 段内反复。`;
+      } else if (W.phase === 'accumD0') {
+        verdict = `SOS 已经放量向上（现价 ${px}，${posTxt}），但还没有缩量回踩的 LPS 确认。原文在 D 段要求「强势拉升 + 缩量回踩」两件事都发生，现在只有前半段。`;
+      } else if (W.phase === 'markup') {
+        verdict = `已在 E 段：价格站上区间上沿 ${resT}（现价 ${px}）。这一段的结构特征是高点持续抬高（${W.hiRise} 次）。E 段本身不是「入场位置」的概念，它的价值在于告诉我们 Cause 已经变现、区间坐标失效，此后要换趋势类框架来看。`;
+      } else if (W.phase === 'distrib') {
+        verdict = `派发样貌：区间上部（${posTxt}）出现上冲回落或买入高潮，高点不再抬高。现价 ${px}。A 股不能做空，这个标签的实际用途是「别在这里谈低吸」—— 供给正在往需求手里塞货。`;
+      } else if (W.phase === 'markdown') {
+        verdict = `下跌段（markdown）：年内 ${W.pos250}% 分位、60 根 ${W.ret60}%、低点与高点都在下移，现价 ${px}，${posTxt}，${supT} 是筹码带下沿的参考。威科夫对这一段的要求是「先见抛售高潮，再见缩量二次测试」，两样都没出现之前，跌得多只是跌得多。`;
+      } else if (W.phase === 'weak') {
+        verdict = `区间走弱（${posTxt}，现价 ${px}）。供给重新占上风，${supT} 这条筹码带下沿正在被反复试探。走弱不等于破位 —— 但「跌到低位」本身不是证据，要看有没有 spring 或者缩量止跌把它拉回带内，否则下一步就是 markdown。`;
+      } else if (W.phase === 'accumB') {
+        verdict = `吸筹 B 段：区间 ${W.w} 根、低点抬高 ${W.lowRise} 次（现价 ${px}，${posTxt}）。B 段的本质是「反复扫」，专门消耗耐心。原文对这一段的态度就是等 —— 只有弹簧或 SOS 才值得当作结构事件。`;
+      } else if (W.phase === 'transition') {
+        verdict = `过渡状态：横盘结构不成立（60 根 ${W.ret60}%、年内 ${W.pos250}% 分位），摆动序列也没给出单向结论。现价 ${px}。这种时候任何「吸筹/派发」的标签都是硬套，等结构自己收敛。`;
+      } else {
+        verdict = `区间中性：${W.isRange ? `${W.w} 根区间成立，现价在 ${posTxt}` : '区间特征不足'}，摆动序列没有方向。现价 ${px}。中性就是中性，不需要为了给结论而挑一个方向。`;
+      }
+
+      return { score: s, verdict, points: pts };
+    },
+  });
+
   QL.registerStrategy({
     id: 'supertrend',
     name: 'SuperTrend',
@@ -5450,6 +5735,9 @@
     zhangting20: 1.15,
     // 威科夫：结构判断（阶段+事件+量价），规则成体系但主观成分多，权重居中
     wyckoff: 1.2,
+    // 威科夫 v2：在 v1 的结构上加摆动序列与证据投票，判定更严、假信号更少，
+    // 但同样是「描述现状」而非「预测方向」，权重与 v1 同级不让它垄断综合分
+    wyckoff2: 1.2,
     // 二买：七重条件串联过滤弱势反弹与高位加速，信号稀少但指向明确
     ermai: 1.1,
     // SKDJ 超卖反弹：判定的是「反弹力度够不够」，属于摆动类，信号频率不低但值博率高
@@ -5466,12 +5754,201 @@
     // 三把锁：三条件串联、信号稀少（每只每年 0.3 次）且自带「趋势 + 位置 + 动量」三重确认，
     // 与涨停回踩 20 日线同属「回调低吸」家族，权重同级
     threelock: 1.15,
+    // 资金量价：低位吸筹 + 高位派发两侧都过检（买 t=2.7、卖 t=-4.3），
+    // 与涨停回踩同属「等回调再进」的家族，给略高于均值的权重
+    flowbs: 1.05,
+  });
+
+  /* ============================================================
+   * 资金量价（VWAP 净流入强度 × 位置分位）
+   *
+   * 对用户原始公式的实证修正（476 只 / 2022-2026 / 55 万根日线）：
+   *   1. 原式用 (C-O)/(H-L) 代表资金方向，未来 5 日 IC = -0.008，方向是反的；
+   *      换成 (C-VWAP)/VWAP 后 IC 全周期转正（5 日 +0.038，20 日 +0.082）。
+   *   2. 原式用全历史 SUM 累计，绝对水平取决于上市起点，跨标的不可比；
+   *      改为 λ=0.98 的衰减累计。
+   *   3. 原式把「换手率」当柱高、把「净量」当颜色，柱高与方向脱节；
+   *      这里柱高就是净流入强度本身。
+   *   4. 交叉信号在卖出侧完全无效（t=0.1），真正有效的是「位置 + 单日强度」双条件。
+   *
+   * 结论：低位放量流入（5 日胜率 60%，扣极端行情后均值 +2.1%）比追涨有效得多。
+   * ============================================================ */
+  QL.registerStrategy({
+    id: 'flowbs', name: '资金量价', short: 'FLOW', color: '#FF6B9D', sub: 'flowbs',
+    desc: 'VWAP 净流入强度 × 位置分位 · 低位吸筹 / 高位派发',
+    overlay(ctx) {
+      const f = ctx.ind.flow;
+      if (!f || !f.bs.length) return [];
+      const vs = ctx.helpers.vspan();
+      const out = [];
+      let last = -99;
+      // 只留二级以上信号，且相邻至少隔 6 根，避免主图被标签淹没
+      for (const b of f.bs) {
+        if (b.grade < 2) continue;
+        if (b.i < vs.lo || b.i > vs.hi) continue;
+        if (b.i - last < 6) continue;
+        last = b.i;
+        const row = ctx.data[b.i];
+        out.push({
+          type: 'marker', i: b.i,
+          p: b.side === 'B' ? row.l : row.h,
+          text: `${b.side}${b.grade}`,
+          color: b.side === 'B' ? '#F6465D' : '#2EBD85',
+          pos: b.side === 'B' ? 'below' : 'above',
+        });
+      }
+      return out;
+    },
+    analyze(ctx) {
+      const f = ctx.ind.flow;
+      const n = ctx.n - 1;
+      if (!f || !Number.isFinite(N(f.s, n))) {
+        return { score: 0, verdict: '资金量价数据不足（需 60 根以上 K 线）', points: [] };
+      }
+      const s0 = N(f.s, n);
+      const pos = N(f.pos, n);
+      const cum = N(f.cum, n), cum5 = N(f.cum, n - 5);
+      const posTxt = pos < 0.2 ? '极低位' : pos < 0.35 ? '低位' : pos > 0.85 ? '极高位' : pos > 0.75 ? '高位' : '中位';
+      const pts = [
+        { k: '净流入强度', v: `${s0.toFixed(2)}（约为 20 日均量的 ${Math.abs(s0).toFixed(1)} 倍${s0 >= 0 ? '净流入' : '净流出'}）` },
+        { k: '价格位置', v: `${(pos * 100).toFixed(0)}% · ${posTxt}（60 根区间）` },
+        { k: '累积方向', v: cum > cum5 ? '近 5 根累积上行，资金持续进场' : '近 5 根累积下行，资金持续离场' },
+      ];
+
+      let score = clamp(s0 * 10, -25, 25);       // 中性区只给弱分
+      if (pos < 0.2 && s0 >= 2) score = 85;
+      else if (pos < 0.3 && s0 >= 1.5) score = 65;
+      else if (pos < 0.4 && s0 >= 1) score = 40;
+      else if (pos > 0.85 && s0 <= -1.5) score = -85;
+      else if (pos > 0.75 && s0 <= -1.5) score = -65;
+      else if (pos > 0.6 && s0 <= -1) score = -40;
+      if (cum > cum5) score += 6; else score -= 6;
+
+      const recent = f.bs.filter(b => b.i > n - 6).pop();
+      if (recent) {
+        pts.push({ k: '最近信号', v: `${recent.side}${recent.grade} · ${ctx.data[recent.i].d} · 强度 ${recent.s}` });
+      }
+
+      return {
+        score: clamp(Math.round(score), -100, 100),
+        verdict: (pos < 0.3 && s0 >= 1.5) ? '低位放量流入，属吸筹启动特征（回测 5 日胜率约 60%，需大盘配合）'
+          : (pos > 0.75 && s0 <= -1.5) ? '高位放量流出，派发特征明显，反弹缺承接'
+            : s0 >= 1.5 ? '资金明显流入，但价格已在相对高位，追高性价比低'
+              : s0 <= -1.5 ? '资金明显流出，短线不宜接'
+                : '资金多空均衡，等待位置与强度同时给出方向',
+        points: pts,
+      };
+    },
+  });
+
+  /* ============================================================
+   * 卡尔曼趋势（状态空间估计）
+   *
+   * 局部线性趋势模型：x = [level, slope]，观测 ln(Close)。
+   * 与均线的本质差别不是「更平滑」，而是**同时给出趋势的方差**：
+   *   slopeZ = slope / √P₁₁  —— 趋势显著不为 0 的 t 统计量，跨标的跨周期可比，
+   *   不需要为「涨 1.5% 算不算趋势」这种问题另设经验阈值。
+   *
+   * 必须说清的实证结论（476 只 / 2022-2026 / 55 万根日线）：
+   *   1. 个股层面用它做趋势跟随无效。日线状态机 36 组参数全部跑输等权基准
+   *      （最好一组年化 -0.4%，基准 +2.5%）；横截面按 slopeZ 排序 t 值 -7 ~ -13
+   *      （反向即短期反转）；「超跌 + 反抽」-38.9%。
+   *   2. 原因不是实现错，而是 A 股日线短期动量本身为负 —— dev 本质是
+   *      「价格 vs 自身均线」的重新包装，换皮不换信息。
+   *   3. 真正有效的用法在市场层：全市场等权指数的 slopeZ 决定仓位。
+   *      中证1000 上实测年化 +1.1%（满仓 -6.4%）、回撤 -46% → -17%。
+   *      接口见 /api/kalman/market，那才是这套东西该出现的地方。
+   *
+   * 所以这里的分是「趋势清晰度」，用来判断该不该按趋势思路持仓，
+   * **不是买卖信号**。verdict 必须保持这个措辞，别改成「建议买入」。
+   * ============================================================ */
+  QL.registerStrategy({
+    id: 'kalman', name: '卡尔曼趋势', short: 'KLM', color: '#4C8DFF', sub: 'kalman',
+    desc: '状态空间估计趋势线与置信通道 · slopeZ 衡量趋势显著性（诊断用，非买卖信号）',
+    overlay(ctx) {
+      const k = ctx.ind.kal;
+      if (!k || !k.n) return [];
+      const vs = ctx.helpers.vspan();
+      const lo = Math.max(0, vs.lo), hi = Math.min(k.n - 1, vs.hi);
+      if (hi - lo < 2) return [];
+      const out = [];
+      const line = (arr, color, width, dash, alpha) => {
+        const pts = [];
+        for (let i = lo; i <= hi; i++) {
+          const v = arr[i];
+          if (v > 0 && isFinite(v)) pts.push([i, v]);
+        }
+        if (pts.length > 1) out.push({ type: 'line', pts, color, width: width || 1.5, dash, alpha: alpha == null ? 0.95 : alpha });
+      };
+      // 通道先画（细虚线），趋势线后画压在上面
+      line(k.upper, 'rgba(76,141,255,.55)', 1, [3, 3], 0.8);
+      line(k.lower, 'rgba(76,141,255,.55)', 1, [3, 3], 0.8);
+      line(k.smoothLevel, 'rgba(232,184,75,.5)', 1, [6, 4], 0.7);   // RTS 平滑（历史，仅供观察）
+      line(k.level, '#4C8DFF', 1.8, null, 0.95);                    // 滤波趋势（可实时用）
+
+      // 状态翻转点：进入/退出趋势的时点，比逐根标签信息量大得多
+      for (const t of (k.turns || [])) {
+        if (t.i < lo || t.i > hi) continue;
+        out.push({
+          type: 'marker', i: t.i, p: ctx.data[t.i].l,
+          color: t.on ? '#F6465D' : '#2EBD85', r: 3.6, bold: true,
+          text: t.on ? '▲趋势' : '▼趋势', pos: 'below',
+        });
+      }
+      return out;
+    },
+    analyze(ctx) {
+      const k = ctx.ind.kal;
+      const n = ctx.n - 1;
+      if (!k || !k.n || !isFinite(k.slopeZ[n])) {
+        return { score: 0, verdict: '卡尔曼数据不足（需 60 根以上 K 线）', points: [] };
+      }
+      const z = k.slopeZ[n];
+      const dev = k.dev[n];
+      const lv = k.level[n], px = k.price[n];
+      const band = k.upper[n] - lv;
+      const bw = lv > 0 ? (band / lv) * 100 : 0;      // 通道半宽（%）
+      // 状态持续根数
+      let run = 1;
+      const sign = z > 0.5 ? 1 : z < -0.5 ? -1 : 0;
+      for (let i = n - 1; i >= 1; i--) {
+        const s = k.slopeZ[i] > 0.5 ? 1 : k.slopeZ[i] < -0.5 ? -1 : 0;
+        if (s !== sign) break;
+        run++;
+      }
+      const pts = [
+        { k: '趋势显著性', v: `${z.toFixed(2)}（t 值；±0.5 为顺/逆风分界，±2 为强势/恐慌）` },
+        { k: '价格 vs 趋势', v: `偏离通道 ${dev.toFixed(2)} 倍（${dev > 1 ? '已破上轨' : dev < -1 ? '已破下轨' : '通道内'}）` },
+        { k: '趋势线 / 现价', v: `${lv.toFixed(2)} / ${px.toFixed(2)}（通道半宽 ±${bw.toFixed(1)}%）` },
+        { k: '状态持续', v: `${run} 根（当前${sign > 0 ? '顺风' : sign < 0 ? '逆风' : '中性'}）` },
+      ];
+      const recent = (k.signals || []).filter((s) => s.i > n - 8).pop();
+      if (recent) pts.push({ k: '最近结构', v: `${recent.d} · ${{ start: '趋势启动', pullback: '趋势回调', breakout: '通道突破', break: '趋势破位', fade: '趋势衰竭', hot: '过热' }[recent.kind] || recent.kind}` });
+
+      // 分数只表达「趋势有多清楚」，不表达「该不该买」。
+      // 实证上 slopeZ 越高，未来收益反而越差（个股层面），所以这里绝不能给正分当买入。
+      const score = Math.round(Math.max(-100, Math.min(100, z * 18)));
+
+      return {
+        score,
+        verdict: Math.abs(z) < 0.5
+          ? '无显著趋势，价格在趋势线附近来回。这种状态下趋势策略会被反复止损，等方向明确再说。'
+          : z >= 0.5
+            ? (dev > 1
+              ? '趋势向上但价格已冲出通道上沿。趋势清晰度高，但此刻进场等于买在拉伸末端。'
+              : '趋势向上且仍在通道内。按趋势思路持仓的顺风段，可用趋势线做移动止损。')
+            : (dev < -1
+              ? '趋势向下且价格已破通道下沿。趋势清晰度高，但方向不利 —— 这套系统在趋势向下时的实测收益为负。'
+              : '趋势向下但价格回到通道内，属于下跌中继的常见形态，别把它当反转。'),
+        points: pts,
+      };
+    },
   });
 
   // 六套体系化战法排在均线之后，保证一进页面就能看到
   (function hoist() {
     for (const [id, pos] of [['jinkeng', 1], ['rou', 2], ['sho', 3], ['albrooks', 4], ['zhangting20', 5], ['threelock', 6],
-      ['wyckoff', 7], ['ermai', 8], ['skdj', 9],
+      ['wyckoff', 7], ['wyckoff2', 8], ['flowbs', 9], ['kalman', 10], ['ermai', 11], ['skdj', 12],
       ['supertrend', 10], ['pamtf', 11], ['tritf', 12], ['trires', 13]]) {
       const i = QL.strategies.findIndex(s => s.id === id);
       if (i > pos) QL.strategies.splice(pos, 0, QL.strategies.splice(i, 1)[0]);

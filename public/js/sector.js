@@ -57,6 +57,8 @@
     { k: 'ma20', label: '20 日均线（MA20）', fmt: 'pts' },
     { k: 'amountPctile', label: '成交额分位', fmt: 'pct' },
     { k: 'volRatio', label: '量比（5 日 / 20 日）', fmt: 'x' },
+    { k: 'netInflow', label: '净流入额', fmt: 'yi' },
+    { k: 'netRatio', label: '净流入占比', fmt: 'pct' },
     { k: 'netInflowPctile', label: '净流入分位', fmt: 'pct' },
     { k: 'upRatio', label: '上涨占比', fmt: 'pct' },
     { k: 'ztCount', label: '涨停家数', fmt: 'int' },
@@ -77,6 +79,7 @@
       case 'pts': return n.toFixed(2);
       case 'x': return n.toFixed(2) + '×';
       case 'int': return String(Math.round(n));
+      case 'yi': return (n / 1e8).toFixed(2) + ' 亿';
       default: return String(n);
     }
   }

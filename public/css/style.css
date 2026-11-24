@@ -61,7 +61,7 @@ header{
 .ring svg{transform:rotate(-90deg)}
 .ring .val{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
   font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
-.score-txt .t{font-size:13px;font-weight:700;letter-spacing:.3px}
+.score-txt .t{font-size:13px;font-weight:700;letter-spacing:.3px;white-space:nowrap}
 .score-txt .s{font-size:10.5px;color:var(--tx3);margin-top:1px}
 
 /* ---------- 布局 ---------- */
@@ -135,7 +135,11 @@ main{max-width:1560px;margin:0 auto;padding:20px 24px 60px;
 
 /* ---------- 图表 ---------- */
 .chart-wrap{position:relative;padding:6px 4px 0}
-#chart{display:block;width:100%;cursor:crosshair}
+/* -webkit-touch-callout / user-select：iOS 上长按 220ms 会弹「拷贝/查询」菜单，
+   十字光标的手势直接被打断；顺带关掉长按高亮。 */
+#chart{display:block;width:100%;cursor:crosshair;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent}
 .tip{
   position:absolute;pointer-events:none;z-index:20;opacity:0;transition:opacity .1s;
   background:rgba(12,17,25,.97);border:1px solid var(--line2);border-radius:9px;
@@ -335,3 +339,111 @@ pre .c{color:#4E5C72} pre .k{color:#FF7A8A} pre .s{color:#8DD6A8} pre .f{color:#
 .sec-t,.advice .n,.legend,.ins-period,.tip .dt,
 .ins-score .l,.pt .k,.srow.off .num,.hint,
 body .chart-bar .grp span,.chart-bar .sp{font-size:12px}
+
+/* ============================================================
+ * 手机端（≤760px）：把「看得见」优先于「放得下」
+ * 1) 头部不吸顶 —— 竖屏高度只有 844px，常驻 100px 的头部等于永久少一根 K 线
+ * 2) 三个次要指标（振幅/换手/流通市值）收起，左栏已有完整数值
+ * 3) 所有可点区域到 32px 以上，手指点得中
+ * ============================================================ */
+.hint-touch{display:none}
+.lbl-short{display:none}
+
+@media(max-width:760px),(max-height:540px){
+  header{position:relative}
+  .hd{padding:9px 12px;gap:8px;row-gap:6px}
+  .brand{gap:8px}
+  .brand .logo{width:28px;height:28px;font-size:12px;border-radius:8px}
+  .brand h1{font-size:14px}
+  .brand p{display:none}
+
+  .hd-right{gap:9px}
+  .metric{display:none}
+  .score-wrap{padding-left:0;border-left:0;gap:7px}
+  .score-txt .t{font-size:12px}
+  .score-txt .s{display:none}
+
+  .stock{width:100%;padding-left:0;border-left:0;gap:6px;flex-wrap:wrap;align-items:baseline}
+  .stock .nm{font-size:13.5px}
+  .stock .cd{font-size:10px}
+  .stock .px{font-size:20px}
+  .stock .cg{font-size:11px}
+  .stock .cg small{display:inline;margin-left:6px;opacity:.72}
+  .stock .cg small::before{content:"· "}
+
+  main{padding:10px 10px 34px;gap:12px}
+  .card{border-radius:12px}
+  .card-bd{padding:13px}
+
+  .insight{padding:15px 13px 17px}
+  .ins-title{font-size:15px}
+  .ins-verdict{font-size:12.8px;line-height:1.78}
+  .pts{gap:7px}
+  .pt{padding:9px 11px}
+  .pt .v{font-size:12px}
+
+  .tabs{padding:8px 10px;gap:5px}
+  .tab{padding:8px 11px;font-size:12px;min-height:36px}
+
+  .chart-wrap{padding:2px 0 0}
+  .chart-bar{padding:8px 10px 10px;gap:7px 8px}
+  .chart-bar .grp>span{display:none}
+  .btn{min-height:32px;padding:5px 11px;font-size:11.5px;border-radius:8px}
+  /* 「副图」按钮只剩两个字，不能让 padding 把字挤没 */
+  .chart-bar .btn{padding-left:8px;padding-right:8px}
+  .chart-bar .grp{margin-left:0!important}
+  .chart-bar .sp{width:100%;margin-left:0;font-size:10px;text-align:center;padding-top:2px}
+  .hint-desk{display:none}
+  .hint-touch{display:inline}
+
+  .srow .nm{flex:0 0 84px;font-size:11.5px}
+  .srow .num{flex:0 0 34px;font-size:11px}
+
+  footer{padding:0 10px calc(26px + env(safe-area-inset-bottom))}
+  .disclaim{padding:12px 14px}
+  .disclaim p{font-size:11px;line-height:1.8}
+  .advice{font-size:12px}
+  .verdict .big{font-size:23px}
+}
+
+/* 回到最新：只在向左拖出视野后出现，避免手机上「不知道滑到哪了」。
+   按钮挂在 .chart-wrap 里（canvas 的兄弟），才能相对图表右上角定位；
+   以前放在下面的操作条里，absolute 一路定位到 body，实际飘到页头去了。 */
+.btn-latest{
+  position:absolute;right:12px;top:8px;z-index:12;
+  padding:5px 10px;border-radius:16px;border:1px solid #33507A;
+  background:rgba(16,26,43,.94);color:#9CC0FF;font-size:11px;font-weight:600;
+  cursor:pointer;backdrop-filter:blur(4px);box-shadow:0 4px 14px rgba(0,0,0,.4)
+}
+.btn-latest:active{background:#1B2B45}
+
+/* 横屏（844×390 这类）：宽度够，高度紧。头部压成一行，别让 200px 的头部吃掉半屏 */
+@media(max-height:540px) and (min-width:761px){
+  /* 一行布局把 brand / stock / hd-right 并排后，三者原始宽度加起来比视口宽：
+     844 下 hd-right 要 424px（导航 300 + 评分环 112），排在 438 处直接顶到 862。
+     收窄 padding 与 gap 拿回约 20px，再给导航兜一层横向滚动，
+     760~900 这段窄横屏（如 800×360）也不会把页面撑出横向滚动条。 */
+  .hd{padding:7px 10px;flex-wrap:nowrap;gap:10px}
+  /* 明确顺序：品牌 → 标的 → 右侧（选股/评分）。不依赖 flex-wrap 的隐式折行 */
+  .hd>.brand{order:1}
+  .hd>.stock{order:2;flex:0 0 auto;width:auto}
+  .hd>.hd-right{order:3;margin-left:auto;flex-wrap:nowrap;min-width:0;gap:10px}
+  .hd>.hd-right>.main-nav{min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .hd>.hd-right>.main-nav::-webkit-scrollbar{display:none}
+  .brand .logo{width:28px;height:28px;font-size:12px}
+  .brand h1{font-size:13px}
+  .brand p{display:none}
+  .stock{width:auto;padding-left:12px;border-left:1px solid var(--line);gap:6px;flex-wrap:nowrap}
+  /* 代码（600986.SH）在横屏让位：省下 ~62px 才能让 5 项导航在 800px 宽度下也不被切 */
+  .stock .cd{display:none}
+  .stock .nm{font-size:13px}
+  .stock .px{font-size:19px}
+  .stock .cg small{display:inline;margin-left:5px;opacity:.7}
+  .stock .cg small::before{content:"· "}
+  .score-wrap{gap:7px;padding-left:10px}
+  /* 评分文字（「中性震荡」）在横屏让位给导航：留着它导航只剩 274px，
+     第 5 项「选股器」会被切掉半个字。环上的数字本身就能读，文字结论左栏有。 */
+  .score-txt{display:none}
+  /* 横屏纵向只有 390px：自选股收起来时连指数条一起收，把高度让给 K 线 */
+  .sidebar.folded .idx-bar{display:none}
+}

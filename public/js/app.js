@@ -83,6 +83,29 @@ window.QLMount = function (RAW, meta) {
     // 三把锁：双平滑动量 MOMI。归一化到 -100~100，日/周/月同参数可比，
     // 不需要像「涨 1.5%」那样按周期折算。
     out.momi = I.MOMI(C, 6);
+    // 资金量价：与回测共用 lib/flow-signal.js 同一份实现。
+    // 方向用 VWAP 偏离（收盘相对当日均价），强度 = 方向 × 量/20日均量。
+    // 实证结论：传统「实体比例」方向 IC 为负，只有 VWAP 偏离全程为正，故默认 vwap。
+    const FL = window.QLFlow;
+    if (FL && data.length > 60) {
+      const rows = data.map(r => [r.d, r.o, r.h, r.l, r.c, r.v, r.a || 0]);
+      const flow = FL.compute(rows, { dir: 'vwap' });
+      const pos = FL.positionSeries(rows, 60);
+      out.flow = {
+        s: flow.s, cum: flow.cum, fast: flow.fast, slow: flow.slow, pos,
+        bs: FL.bsSignals(rows, flow, pos),
+      };
+    }
+    // 卡尔曼趋势：局部线性状态空间模型，level/slope 联合估计。
+    // 注意字段顺序 —— data 是 {d,o,c,h,l,v,a}，而 kalman 内部按 [d,o,h,l,c,v,a] 取值，
+    // 直接传 data 会把「低」当「收」算出完全错的结果，这里显式重建。
+    const KL = window.QLKalman;
+    if (KL && data.length > 60) {
+      const krows = data.map(r => [r.d, r.o, r.h, r.l, r.c, r.v, r.a || 0]);
+      // λ=0.3：该值下 logLik 与「标准化创新方差≈1」两个准则同时最优，
+      // 模型自洽时 slopeZ（t 值）才有统计意义。λ 更小会让 t 值虚高。
+      out.kal = KL.analyze(krows, { snr: 0.3 });
+    }
     return out;
   }
 
@@ -701,6 +724,41 @@ window.QLMount = function (RAW, meta) {
         const ratio = V.map((v, i) => (ind.volMa5[i] ? v / ind.volMa5[i] : null));
         return { type, title: '量比（当日量/5日均量）', series: [{ data: ratio, color: '#6FD3C7', width: 1.5, label: '量比' }], refs: [{ v: 1, color: '#2E3A4D', label: '1.0' }, { v: 2, color: '#3A2E14' }] };
       }
+      case 'flowbs': {
+        const f = ind.flow;
+        if (!f) return none;
+        // 柱 = 单日净流入强度（正红负绿），比通达信把「换手率」当柱高更贴近语义；
+        // 线 = 强度的 5 根平滑，用于看方向是否持续；±1.5 是信号阈值。
+        const smooth = I.EMA(f.s, 5);
+        return {
+          type, title: '资金净流入强度（VWAP 口径）',
+          series: [{ data: smooth, color: '#E8B84B', width: 1.5, label: 'MF5' }],
+          bars: f.s,
+          refs: [
+            { v: 0, color: '#2E3A4D', label: '0' },
+            { v: 1.5, color: '#2B4A3A', dash: [3, 3], label: '+1.5' },
+            { v: -1.5, color: '#4A2B33', dash: [3, 3], label: '-1.5' },
+          ],
+        };
+      }
+      case 'kalman': {
+        const k = ind.kal;
+        if (!k || !k.n) return none;
+        // 柱 = slopeZ（趋势显著性 t 值），正红负绿；线同一份数据，柱子便于看穿刺瞬间。
+        // ±0.5 是「顺风/逆风」分界，±2 是强势/恐慌区，都是回测里用过的分档边界。
+        return {
+          type, title: '趋势显著性 slopeZ（>0.5 顺风 · <−0.5 逆风）',
+          series: [{ data: k.slopeZ, color: '#8AB4FF', width: 1.4, label: 'slopeZ' }],
+          bars: k.slopeZ,
+          refs: [
+            { v: 0, color: '#33415A', label: '0' },
+            { v: 0.5, color: '#3A2E14', dash: [3, 3], label: '+0.5' },
+            { v: -0.5, color: '#2B3A2E', dash: [3, 3], label: '−0.5' },
+            { v: 2, color: '#5A2530', dash: [2, 4] },
+            { v: -2, color: '#295A45', dash: [2, 4] },
+          ],
+        };
+      }
       case 'cmf':
         return {
           type, title: 'CMF 资金流(20,5)', min: -0.45, max: 0.45, series: [
@@ -921,6 +979,20 @@ window.QLMount = function (RAW, meta) {
   const initP = RAW_BY[window.__qlPeriod] && RAW_BY[window.__qlPeriod].length >= 5 ? window.__qlPeriod : 'day';
   applyPeriod(initP);
   chart.setData(data, ind);
+
+  /* 「最新」按钮：手机上左滑看历史后，容易停在十几根之前而不自知。
+     只做一件事——把视窗拉回最右端；是否显示由每次 render 后的位置判断。 */
+  const btnLatest = HEADLESS ? null : document.getElementById('btnLatest');
+  if (btnLatest) {
+    const rawRender = chart.render.bind(chart);
+    const syncLatest = () => {
+      const atEnd = chart.viewStart + chart.viewCount >= chart.data.length - 1;
+      btnLatest.hidden = atEnd || chart.viewCount >= chart.data.length;
+    };
+    chart.render = function () { rawRender(); syncLatest(); };
+    btnLatest.onclick = () => { chart.setRange(chart.viewCount); };
+    syncLatest();
+  }
 
   /* ---------------- 单流派分析（无头模式入口） ---------------- */
   function analyzeOne(sid) {
@@ -1465,7 +1537,11 @@ window.QLMount = function (RAW, meta) {
   }
 
   /* ---------------- 周期切换 ---------------- */
-  // 用户手动选过根数就沿用，没选过按 90 根；切换周期不重置，避免按钮高亮与实际不符
+  // 用户手动选过根数就沿用，没选过按屏幕宽度取默认值：
+  // 手机上 390px 宽如果塞 90 根，一根蜡烛只有 3.5px，涨跌都看不清；
+  // 60 根大约是一根 5px，能分辨实体和影线，又保留三个月的形态。
+  const NARROW = () => window.innerWidth < 760;
+  const defaultBars = () => (NARROW() ? 60 : 140);
   let userBars = null;
 
   document.querySelectorAll('[data-bars]').forEach(b => {
@@ -1473,8 +1549,8 @@ window.QLMount = function (RAW, meta) {
       document.querySelectorAll('[data-bars]').forEach(x => x.classList.remove('on'));
       b.classList.add('on');
       userBars = parseInt(b.dataset.bars, 10);
-      // 「全部」= 当前标的所有可得 K 线（指数可能上千根，个股 1200）
-      if (userBars >= 1200) userBars = data.length;
+      // 「全部」= 当前标的所有可得 K 线（个股约 2512 根 ≈ 10 年，指数最多 5000 根）
+      if (userBars >= 2000) userBars = data.length;
       chart.setRange(userBars);
       select(current.id);
     };
@@ -1540,7 +1616,7 @@ window.QLMount = function (RAW, meta) {
     if (p === period) return;
     if (!applyPeriod(p)) return;          // 数据不足（如新股缺月线），保持原周期
     chart.setData(data, ind);
-    chart.setRange(Math.min(userBars || 90, data.length));
+    chart.setRange(Math.min(userBars || defaultBars(), data.length));
     document.querySelectorAll('[data-period]').forEach(x => x.classList.toggle('on', x.dataset.period === period));
     syncDayOnlyTabs();
     rerenderAll();
@@ -1556,6 +1632,26 @@ window.QLMount = function (RAW, meta) {
   }
 
   /* ---------------- 启动 ---------------- */
+  /* hash 形如 #600986/ma 或 #sh000001/wyckoff：取斜杠后的流派 id。
+   * 抽成独立函数，供启动与 hashchange 两处复用 —— 以前只有启动读一次 hash，
+   * 用户从外部链接直达、点浏览器后退、或用脚本改 hash 时页面不会跟着切流派，
+   * 表现成「地址栏已经是 wyckoff，卡片还停在均线系统」。 */
+  function applyHash() {
+    const h = (location.hash || '').replace('#', '');
+    const sid = h.split('/')[1] || h;
+    if (!sid) return false;
+    const ok = QL.strategies.some((s2) => s2.id === sid);
+    if (!ok) return false;
+    // 「已经选中」不能只看 current：切换标的会整体重挂 QLMount，tabs 被重建、
+    // 新按钮没有 on 类，而 current 已经被初始化成 strategies[0]。
+    // 只比 current 会跳过 select()，结果是切股后流派标签全不高亮、解读卡也不刷新。
+    // 所以还要确认 DOM 上确实有对应的高亮项。
+    const onTab = document.querySelector('.tab.on');
+    if (current && current.id === sid && onTab && onTab.dataset.id === sid) return true;
+    select(sid);
+    return true;
+  }
+
   function boot() {
     document.querySelectorAll('[data-period]').forEach(x => x.classList.toggle('on', x.dataset.period === period));
     syncDayOnlyTabs();
@@ -1564,11 +1660,7 @@ window.QLMount = function (RAW, meta) {
     const dg = diagnosis();
     renderSide(comp, dg);
     renderOverview(comp);
-    // hash 形如 #600986/ma 或 #sh000001/wyckoff：取斜杠后的流派 id
-    const h = (location.hash || '').replace('#', '');
-    const sid = h.split('/')[1] || h;
-    const ok = QL.strategies.some(s2 => s2.id === sid);
-    select(ok ? sid : QL.strategies[0].id);
+    if (!applyHash()) select(QL.strategies[0].id);
   }
 
   boot();
@@ -1597,6 +1689,11 @@ window.QLMount = function (RAW, meta) {
       const n2 = (i + (e.key === 'ArrowRight' ? 1 : -1) + list.length) % list.length;
       app.select(list[n2].id);
       setHash(list[n2].id);
+    });
+    // 地址栏 hash 变化（外链直达 / 前进后退 / 脚本设置）要跟着切流派。
+    // setHash() 走的是 history.replaceState，不会触发 hashchange，因此不会打架。
+    window.addEventListener('hashchange', () => {
+      try { applyHash(); } catch (e) { console.error('hashchange', e); }
     });
     let rt;
     window.addEventListener('resize', () => {

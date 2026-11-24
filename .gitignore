@@ -43,3 +43,12 @@ data/cache/
 
 # 通达信网关二进制（go build 产物，云端按平台重新编译）
 tdx-gateway/bin/
+
+# 我方的发布包（体积大，不入库）
+public/quantlab-1.0.zip
+
+# 研究脚本的月线缓存（几十万根 K 线，不入库）
+scripts/research/**/.cache/
+
+# 回测数据集（55MB，由 tools/flow-dataset.js 从扶摇重取，不入库）
+data/backtest/
