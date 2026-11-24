@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.quantlab.gateway</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/apple/WorkBuddy/Worktrees/stock-lab/master-c24bc4f5/tdx-gateway/bin/tdx-gateway</string>
+    <string>-port</string><string>7710</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/apple/WorkBuddy/Worktrees/stock-lab/master-c24bc4f5</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>/tmp/ql-gateway.log</string>
+  <key>StandardErrorPath</key><string>/tmp/ql-gateway.err</string>
+</dict></plist>

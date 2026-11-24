@@ -38,7 +38,9 @@ app.use(express.json({ limit: '128kb' }));
 app.use((req, res, next) => {
   const a = config.auth || {};
   if (!a.enabled) return next();
-  const pass = process.env[a.passEnv || 'QL_AUTH_PASS'] || '';
+  // 密码优先级：环境变量 > config.local.json 的 auth.pass。
+  // 后者是本地文件（已 gitignore），交给 launchd/systemd 托管时不用把密码写进 plist。
+  const pass = process.env[a.passEnv || 'QL_AUTH_PASS'] || a.pass || '';
   if (!pass) {
     // 开了认证却没给密码：只允许本机，避免把没保护的端口暴露出去
     const fromProxy = !!(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']);

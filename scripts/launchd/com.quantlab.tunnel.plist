@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.quantlab.tunnel</string>
+  <key>ProgramArguments</key><array>
+    <string>/Users/apple/.local/bin/cloudflared</string>
+    <string>tunnel</string><string>--url</string><string>http://localhost:8848</string>
+    <string>--no-autoupdate</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>20</integer>
+  <key>StandardOutPath</key><string>/tmp/ql-tunnel.log</string>
+  <key>StandardErrorPath</key><string>/tmp/ql-tunnel.err</string>
+</dict></plist>
