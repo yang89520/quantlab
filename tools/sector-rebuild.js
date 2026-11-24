@@ -60,7 +60,11 @@ const has = (n) => process.argv.includes('--' + n);
   try {
     const td = await ds.latestTradingDay();
     latest = String((td && td.date) || '').slice(0, 10);
-  } catch (e) { /* 拿不到就按全部历史处理，capture 内部还会再判一次 */ }
+  } catch (e) {
+    // 拿不到就当「不知道最近交易日」：capture 内部还会再判一次，
+    // 那里失败会把资金流剥掉（保守方向），所以这里只留痕不中断。
+    log.warn('sector-rebuild.latest_day_failed', { error: e.message });
+  }
 
   console.log(`待重算 ${dates.length} 天：${dates[0]} → ${dates[dates.length - 1]}`);
   console.log(`最近已收盘交易日：${latest || '未知'}（该日会保留资金流，其余日剥掉）`);
