@@ -52,3 +52,6 @@ scripts/research/**/.cache/
 
 # 回测数据集（55MB，由 tools/flow-dataset.js 从扶摇重取，不入库）
 data/backtest/
+
+# 启停脚本的运行时状态（pid 文件，不入库）
+.run/
