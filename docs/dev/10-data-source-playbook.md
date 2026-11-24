@@ -403,6 +403,31 @@ npm run tdx:map       # 生成板块映射表（data/sectors/tdx-map.json）
 
 网关二进制不入库（`tdx-gateway/bin/` 在 .gitignore 里），云端按平台重新 `go build`。
 
+### 3.3.3 资金流（2026-11-24 接入新浪源，唯一没有历史的资产）
+
+东财 f62 在 2026-11 失效后，`net-inflow` 空了将近两周，板块榜一直在跑
+「成交额 + 量能」的降级口径。现在改由**新浪资金流**顶上（`sina-moneyflow`，
+按板块代码精确匹配，220/221 命中），`degraded` 从 221 降到 1，A 档 4~7 → 9。
+
+**这一项回补不了。** 新浪资金流接口**没有日期参数**，永远只返回「此刻」的值；
+字典文件 `data/sectors/dict.json` 里存的也是最近一次采集结果的快照。
+
+所以两条取数路径都必须拦住历史日：
+
+| 路径 | 位置 | 拦法 |
+|---|---|---|
+| 在线采集 | `sectordata.collectDict({allowInflow:false})` | 直接不调 `tryAsset('net-inflow')`，日志 `inflow_skipped` |
+| 离线字典（`membersFrom:'store'`） | `sectordata.capture` 离线分支 | 把字典里的 `netInflow` 全部剥成 null，日志 `inflow_stripped` |
+
+判据统一为「本次采的日期 == 最近已收盘交易日」。否则**宁可没有，也不能拿今天的
+写进昨天** —— 那种数据有值、非空、量级合理，没有任何迹象能让人发现它是错的。
+
+后果要接受：**2026-11-24 是一个口径分界**。之前的板块分档是纯量价口径，
+之后含真实资金流。判断力曲线跨界对比时，A 档数量的跳变不代表市场变化。
+
+`npm run sector:rebuild` 可以批量重算板块强度（只动 `sector_strength`，
+不碰快照/预判），但重算**改变不了资金流这一项** —— 历史日算完仍是 null。
+
 ### 3.4 涨停池
 
 **主源：东财 push2ex**（实测可用）

@@ -29,7 +29,8 @@
     "tdx:build": "cd tdx-gateway && go build -o bin/tdx-gateway .",
     "tdx:start": "cd tdx-gateway && ./bin/tdx-gateway -port 7710",
     "tdx:map": "node tools/tdx-map.js",
-    "tdx:probe": "node -e \"const t=require('./lib/sources/adapters/tdx');t.available(true).then(async ok=>{if(!ok){console.log('❌ 网关不可用：'+t.base());process.exit(1)}console.log('✅ 网关可用 '+t.base());const k=await t.kline('880301',{bars:5});console.log('   板块指数 880301: '+k.rows.length+' 根, asOf='+k.asOf);const q=await t.quote(['sh000001']);console.log('   报价: '+(q[0]?q[0].price:'—'));}).catch(e=>{console.log('❌ '+e.message);process.exit(1)})\""
+    "tdx:probe": "node -e \"const t=require('./lib/sources/adapters/tdx');t.available(true).then(async ok=>{if(!ok){console.log('❌ 网关不可用：'+t.base());process.exit(1)}console.log('✅ 网关可用 '+t.base());const k=await t.kline('880301',{bars:5});console.log('   板块指数 880301: '+k.rows.length+' 根, asOf='+k.asOf);const q=await t.quote(['sh000001']);console.log('   报价: '+(q[0]?q[0].price:'—'));}).catch(e=>{console.log('❌ '+e.message);process.exit(1)})\"",
+    "sector:rebuild": "node tools/sector-rebuild.js"
   },
   "keywords": [],
   "author": "",
