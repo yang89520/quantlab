@@ -23,6 +23,53 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '128kb' }));
 
 /**
+ * 公网访问的基本认证（config.auth）。
+ *
+ * 为什么要按来源区分：本机直连是日常开发和验收脚本在跑，加了密码只会到处报 401；
+ * 但一旦挂到 Cloudflare 隧道上，任何人都能改自选股、跑回测、触发五道闸——
+ * 这个服务有 16 个写接口且原本零认证。
+ *
+ * 判据：隧道/反代会在请求上带 cf-connecting-ip（Cloudflare）或 x-forwarded-for，
+ * 本机直连没有。所以「有代理头 = 从公网来的」这一条足够用，不需要维护白名单。
+ * protectLocal 打开则本机也要密码，用于验证认证链路本身。
+ *
+ * 密码从环境变量读，不落配置文件——config.json 是要入库的。
+ */
+app.use((req, res, next) => {
+  const a = config.auth || {};
+  if (!a.enabled) return next();
+  const pass = process.env[a.passEnv || 'QL_AUTH_PASS'] || '';
+  if (!pass) {
+    // 开了认证却没给密码：只允许本机，避免把没保护的端口暴露出去
+    const fromProxy = !!(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']);
+    if (fromProxy) {
+      res.set('www-authenticate', 'Basic realm="quantlab"');
+      return res.status(503).json({ ok: false, error: '服务未配置访问密码（QL_AUTH_PASS），拒绝公网访问' });
+    }
+    return next();
+  }
+  const fromProxy = !!(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for']);
+  if (!fromProxy && !a.protectLocal) return next();
+
+  const hdr = String(req.headers.authorization || '');
+  const m = hdr.match(/^Basic\s+(.+)$/i);
+  if (m) {
+    let user = '', given = '';
+    try {
+      const raw = Buffer.from(m[1], 'base64').toString('utf8');
+      const i = raw.indexOf(':');
+      user = i >= 0 ? raw.slice(0, i) : raw;
+      given = i >= 0 ? raw.slice(i + 1) : '';
+    } catch (e) {
+      log.warn('auth.bad_header', { error: e.message });
+    }
+    if (user === (a.user || 'quantlab') && given === pass) return next();
+  }
+  res.set('www-authenticate', 'Basic realm="quantlab", charset="UTF-8"');
+  return res.status(401).json({ ok: false, error: '需要访问密码' });
+});
+
+/**
  * gzip：全市场快照一个响应就有 1.7MB（5000 只 × 15 字段），
  * 不压缩在移动网络上要等好几秒。这里只压 JSON，且小响应不动。
  */
